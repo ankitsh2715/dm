@@ -1,0 +1,8 @@
+Steps to Execute Code:
+1.	pip3 install numpy
+2.	pip3 install pandas
+3.	python3 main.py
+
+Instructions:
+1.	Keep CGMData and InsulinData csv files at same location as main.py
+2.	Results.csv will be generated at same location as main.py
