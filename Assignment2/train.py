@@ -52,56 +52,56 @@ def getNoMealData(mealTimes, startTime, endTime, isMealData, gcData):
     return pd.DataFrame(data=mealData_list)
 
 
-def processData(insulin_data, glucose_data):
+def processData(insulinData, gcData):
     meal_data = pd.DataFrame()
     noMeal_data = pd.DataFrame()
-    insulin_data = insulin_data[::-1]
-    glucose_data = glucose_data[::-1]
-    glucose_data["Sensor Glucose (mg/dL)"] = glucose_data[
+    insulinData = insulinData[::-1]
+    gcData = gcData[::-1]
+    gcData["Sensor Glucose (mg/dL)"] = gcData[
         "Sensor Glucose (mg/dL)"
     ].interpolate(method="linear", limit_direction="both")
 
-    insulin_data["datetime"] = pd.to_datetime(
-        insulin_data["Date"].astype(str) + " " + insulin_data["Time"].astype(str)
+    insulinData["datetime"] = pd.to_datetime(
+        insulinData["Date"].astype(str) + " " + insulinData["Time"].astype(str)
     )
-    glucose_data["datetime"] = pd.to_datetime(
-        glucose_data["Date"].astype(str) + " " + glucose_data["Time"].astype(str)
+    gcData["datetime"] = pd.to_datetime(
+        gcData["Date"].astype(str) + " " + gcData["Time"].astype(str)
     )
 
-    new_insulin_data = insulin_data[["datetime", "BWZ Carb Input (grams)"]]
-    new_glucose_data = glucose_data[["datetime", "Sensor Glucose (mg/dL)"]]
+    processed_insulinData = insulinData[["datetime", "BWZ Carb Input (grams)"]]
+    processed_gcData = gcData[["datetime", "Sensor Glucose (mg/dL)"]]
 
-    new_insulin_data = new_insulin_data[
-        (new_insulin_data["BWZ Carb Input (grams)"].notna())
-        & (new_insulin_data["BWZ Carb Input (grams)"] > 0)
+    processed_insulinData = processed_insulinData[
+        (processed_insulinData["BWZ Carb Input (grams)"].notna())
+        & (processed_insulinData["BWZ Carb Input (grams)"] > 0)
     ]
 
-    newTimes = list(new_insulin_data["datetime"])
+    times_list = list(processed_insulinData["datetime"])
 
-    mealTimes = []
-    nomealTimes = []
-    mealTimes = getNoMealTimes(newTimes, pd.Timedelta("0 days 120 min"))
-    nomealTimes = getNoMealTimes(newTimes, pd.Timedelta("0 days 240 min"))
+    meal_times = []
+    noMeal_times = []
+    meal_times = getNoMealTimes(times_list, pd.Timedelta("0 days 120 min"))
+    noMeal_times = getNoMealTimes(times_list, pd.Timedelta("0 days 240 min"))
 
-    meal_data = getNoMealData(mealTimes, -0.5, 2, True, new_glucose_data)
-    noMeal_data = getNoMealData(nomealTimes, 2, 4, False, new_glucose_data)
-    mealDataFeatures = glucoseFeatures(meal_data)
-    noMealDataFeatures = glucoseFeatures(noMeal_data)
+    meal_data = getNoMealData(meal_times, -0.5, 2, True, processed_gcData)
+    noMeal_data = getNoMealData(noMeal_times, 2, 4, False, processed_gcData)
+    features_meal_data = glucoseFeatures(meal_data)
+    features_noMeal_data = glucoseFeatures(noMeal_data)
 
-    stdScaler = StandardScaler()
-    meal_std = stdScaler.fit_transform(mealDataFeatures)
-    noMeal_std = stdScaler.fit_transform(noMealDataFeatures)
+    ss = StandardScaler()
+    ss_meal = ss.fit_transform(features_meal_data)
+    ss_noMeal = ss.fit_transform(features_noMeal_data)
 
     pca = PCA(n_components=5)
-    pca.fit(meal_std)
+    pca.fit(ss_meal)
 
-    meal_pca = pd.DataFrame(pca.fit_transform(meal_std))
-    noMeal_pca = pd.DataFrame(pca.fit_transform(noMeal_std))
+    pca_meal = pd.DataFrame(pca.fit_transform(ss_meal))
+    pca_noMeal = pd.DataFrame(pca.fit_transform(ss_noMeal))
 
-    meal_pca["class"] = 1
-    noMeal_pca["class"] = 0
+    pca_meal["class"] = 1
+    pca_noMeal["class"] = 0
 
-    data = meal_pca.append(noMeal_pca)
+    data = pca_meal.append(pca_noMeal)
     data.index = [i for i in range(data.shape[0])]
     return data
 
