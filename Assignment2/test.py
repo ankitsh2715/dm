@@ -6,7 +6,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 pickle_compat.patch()
 
-with open("RF_Model.pkl", "rb") as file:
+with open("Model.pkl", "rb") as file:
     model = pickle.load(file)
     test_df = pd.read_csv("test.csv", header=None)
 
