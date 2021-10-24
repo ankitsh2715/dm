@@ -11,6 +11,80 @@ from sklearn.svm import SVC
 pickle_compat.patch()
 
 
+def calcAbsoluteMean(parameter):
+    abs_mean = 0
+    for param in range(0, len(parameter) - 1):
+        abs_mean = abs_mean + np.abs(parameter[(param + 1)] - parameter[param])
+    return abs_mean / len(parameter)
+
+
+def calcGcEntropy(parameter):
+    param_len = len(parameter)
+    gc_entropy = 0
+    if param_len <= 1:
+        return 0
+    else:
+        value, ctr = np.unique(parameter, return_counts=True)
+        ratio = ctr / param_len
+        ratio_nonzero = np.count_nonzero(ratio)
+        if ratio_nonzero <= 1:
+            return 0
+        for i in ratio:
+            gc_entropy -= i * np.log2(i)
+        return gc_entropy
+
+
+def calcRMS(parameter):
+    rms = 0
+    for param in range(0, len(parameter) - 1):
+
+        rms = rms + np.square(parameter[param])
+    return np.sqrt(rms / len(parameter))
+
+
+def calcFFT(parameter):
+    ffourier = fft(parameter)
+    parameter_len = len(parameter)
+
+    t = 2 / 300
+    amp = []
+    freq = np.linspace(0, parameter_len * t, parameter_len)
+
+    for amp in ffourier:
+        amp.append(np.abs(amp))
+
+    sorted_amp = amp
+    sorted_amp = sorted(sorted_amp)
+    max_amp = sorted_amp[(-2)]
+    max_freq = freq.tolist()[amp.index(max_amp)]
+
+    return [max_amp, max_freq]
+
+
+def getGCFeatures(data_Meal_NoMeal):
+    gc_features = pd.DataFrame()
+
+    for i in range(0, data_Meal_NoMeal.shape[0]):
+        param = data_Meal_NoMeal.iloc[i, :].tolist()
+        gc_features = gc_features.append(
+            {
+                "Minimum Value": min(param),
+                "Maximum Value": max(param),
+                "Mean of Absolute Values1": calcAbsoluteMean(param[:13]),
+                "Mean of Absolute Values2": calcAbsoluteMean(param[13:]),
+                "Root Mean Square": calcRMS(param),
+                "Entropy": calcGcEntropy(param),
+                "Max FFT Amplitude1": calcFFT(param[:13])[0],
+                "Max FFT Frequency1": calcFFT(param[:13])[1],
+                "Max FFT Amplitude2": calcFFT(param[13:])[0],
+                "Max FFT Frequency2": calcFFT(param[13:])[1],
+            },
+            ignore_index=True,
+        )
+
+    return gc_features
+
+
 def getNoMealTimes(time, timeDiff):
     times_arr = []
     time1 = time[0 : len(time) - 1]
@@ -57,9 +131,9 @@ def processData(insulinData, gcData):
     noMeal_data = pd.DataFrame()
     insulinData = insulinData[::-1]
     gcData = gcData[::-1]
-    gcData["Sensor Glucose (mg/dL)"] = gcData[
-        "Sensor Glucose (mg/dL)"
-    ].interpolate(method="linear", limit_direction="both")
+    gcData["Sensor Glucose (mg/dL)"] = gcData["Sensor Glucose (mg/dL)"].interpolate(
+        method="linear", limit_direction="both"
+    )
 
     insulinData["datetime"] = pd.to_datetime(
         insulinData["Date"].astype(str) + " " + insulinData["Time"].astype(str)
@@ -85,8 +159,8 @@ def processData(insulinData, gcData):
 
     meal_data = getNoMealData(meal_times, -0.5, 2, True, processed_gcData)
     noMeal_data = getNoMealData(noMeal_times, 2, 4, False, processed_gcData)
-    features_meal_data = glucoseFeatures(meal_data)
-    features_noMeal_data = glucoseFeatures(noMeal_data)
+    features_meal_data = getGCFeatures(meal_data)
+    features_noMeal_data = getGCFeatures(noMeal_data)
 
     ss = StandardScaler()
     ss_meal = ss.fit_transform(features_meal_data)
@@ -103,120 +177,30 @@ def processData(insulinData, gcData):
 
     data = pca_meal.append(pca_noMeal)
     data.index = [i for i in range(data.shape[0])]
+
     return data
 
 
-def fn_zero_crossings(row, xAxis):
-    slopes = [0]
-    zero_cross = list()
-    zero_crossing_rate = 0
-    X = [i for i in range(xAxis)][::-1]
-    Y = row[::-1]
-    for index in range(0, len(X) - 1):
-        slopes.append((Y[(index + 1)] - Y[index]) / (X[(index + 1)] - X[index]))
-
-    for index in range(0, len(slopes) - 1):
-        if slopes[index] * slopes[(index + 1)] < 0:
-            zero_cross.append([slopes[(index + 1)] - slopes[index], X[(index + 1)]])
-
-    zero_crossing_rate = np.sum(
-        [
-            np.abs(np.sign(slopes[(i + 1)]) - np.sign(slopes[i]))
-            for i in range(0, len(slopes) - 1)
-        ]
-    ) / (2 * len(slopes))
-    if len(zero_cross) > 0:
-        return [max(zero_cross)[0], zero_crossing_rate]
-    else:
-        return [0, 0]
-
-
-def absoluteValueMean(param):
-    meanValue = 0
-    for p in range(0, len(param) - 1):
-        meanValue = meanValue + np.abs(param[(p + 1)] - param[p])
-    return meanValue / len(param)
-
-
-def glucoseEntropy(param):
-    paramLen = len(param)
-    entropy = 0
-    if paramLen <= 1:
-        return 0
-    else:
-        value, count = np.unique(param, return_counts=True)
-        ratio = count / paramLen
-        nonZero_ratio = np.count_nonzero(ratio)
-        if nonZero_ratio <= 1:
-            return 0
-        for i in ratio:
-            entropy -= i * np.log2(i)
-        return entropy
-
-
-def rootMeanSquare(param):
-    rootMeanSquare = 0
-    for p in range(0, len(param) - 1):
-
-        rootMeanSquare = rootMeanSquare + np.square(param[p])
-    return np.sqrt(rootMeanSquare / len(param))
-
-
-def fastFourier(param):
-    fastFourier = fft(param)
-    paramLen = len(param)
-    t = 2 / 300
-    amplitude = []
-    frequency = np.linspace(0, paramLen * t, paramLen)
-    for amp in fastFourier:
-        amplitude.append(np.abs(amp))
-    sortedAmplitude = amplitude
-    sortedAmplitude = sorted(sortedAmplitude)
-    max_amplitude = sortedAmplitude[(-2)]
-    max_frequency = frequency.tolist()[amplitude.index(max_amplitude)]
-    return [max_amplitude, max_frequency]
-
-
-def glucoseFeatures(meal_Nomeal_data):
-    glucoseFeatures = pd.DataFrame()
-    for i in range(0, meal_Nomeal_data.shape[0]):
-        param = meal_Nomeal_data.iloc[i, :].tolist()
-        glucoseFeatures = glucoseFeatures.append(
-            {
-                "Minimum Value": min(param),
-                "Maximum Value": max(param),
-                "Mean of Absolute Values1": absoluteValueMean(param[:13]),
-                "Mean of Absolute Values2": absoluteValueMean(param[13:]),
-                "Root Mean Square": rootMeanSquare(param),
-                "Entropy": rootMeanSquare(param),
-                "Max FFT Amplitude1": fastFourier(param[:13])[0],
-                "Max FFT Frequency1": fastFourier(param[:13])[1],
-                "Max FFT Amplitude2": fastFourier(param[13:])[0],
-                "Max FFT Frequency2": fastFourier(param[13:])[1],
-            },
-            ignore_index=True,
-        )
-    return glucoseFeatures
-
-
 if __name__ == "__main__":
-    insulin_data_1 = pd.read_csv("Insulin_patient2.csv")
-    glucose_data_1 = pd.read_csv("CGM_patient2.csv")
-    insulin_data_2 = pd.read_csv("InsulinData.csv", low_memory=False)
-    glucose_data_2 = pd.read_csv("CGMData.csv", low_memory=False)
-    insulin_data = pd.concat([insulin_data_1, insulin_data_2])
-    glucose_data = pd.concat([glucose_data_1, glucose_data_2])
+    insulin_patient2 = pd.read_csv("Insulin_patient2.csv")
+    cgm_patient2 = pd.read_csv("CGM_patient2.csv")
+    insulin_data = pd.read_csv("InsulinData.csv", low_memory=False)
+    cgm_data = pd.read_csv("CGMData.csv", low_memory=False)
+    insulin_data = pd.concat([insulin_patient2, insulin_data])
+    glucose_data = pd.concat([cgm_patient2, cgm_data])
+
     data = processData(insulin_data, glucose_data)
     X = data.iloc[:, :-1]
     Y = data.iloc[:, -1]
 
     model = SVC(kernel="linear", C=1, gamma=0.1)
-    kfold = KFold(5, True, 1)
-    for tr, tst in kfold.split(X, Y):
-        X_train, X_test = X.iloc[tr], X.iloc[tst]
-        Y_train, Y_test = Y.iloc[tr], Y.iloc[tst]
+    k_fold = KFold(5, True, 1)
 
-        model.fit(X_train, Y_train)
+    for train, test in k_fold.split(X, Y):
+        train_x, test_x = X.iloc[train], X.iloc[test]
+        train_y, test_y = Y.iloc[train], Y.iloc[test]
+
+        model.fit(train_x, train_y)
 
     with open("Model.pkl", "wb") as (file):
         pickle.dump(model, file)
