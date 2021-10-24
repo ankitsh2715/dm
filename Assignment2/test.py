@@ -1,24 +1,20 @@
-# -*- coding: utf-8 -*-
-
 import pandas as pd
-from sklearn.preprocessing import StandardScaler
-from train import glucoseFeatures
 import pickle
-from sklearn.decomposition import PCA
 import pickle_compat
+from train import glucoseFeatures
+from sklearn.preprocessing import StandardScaler
+from sklearn.decomposition import PCA
 pickle_compat.patch()
 
+with open("RF_Model.pkl", "rb") as file:
+    model = pickle.load(file)
+    test_df = pd.read_csv("test.csv", header=None)
 
-with open("RF_Model.pkl", 'rb') as file:
-        GPC_Model = pickle.load(file) 
-        test_df = pd.read_csv('test.csv', header=None)
-    
+glucose_features = glucoseFeatures(test_df)
+fit_SS = StandardScaler().fit_transform(glucose_features)
 
-cgm_features=glucoseFeatures(test_df)
-ss_fit = StandardScaler().fit_transform(cgm_features)
-    
 pca = PCA(n_components=5)
-pca_fit=pca.fit_transform(ss_fit)
-    
-predictions = GPC_Model.predict(pca_fit)
-pd.DataFrame(predictions).to_csv("Results.csv", header=None, index=False)
+fit_PCA = pca.fit_transform(fit_SS)
+
+result = model.predict(fit_PCA)
+pd.DataFrame(result).to_csv("Results.csv", header=None, index=False)
