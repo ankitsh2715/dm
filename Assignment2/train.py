@@ -129,27 +129,30 @@ def calcGCEntropy(parameter):
         return entropy
 
 
-def rootMeanSquare(param):
-    rootMeanSquare = 0
-    for p in range(0, len(param) - 1):
+def calcRMS(parameter):
+    rms = 0
+    for param in range(0, len(parameter) - 1):
 
-        rootMeanSquare = rootMeanSquare + np.square(param[p])
-    return np.sqrt(rootMeanSquare / len(param))
+        rms = rms + np.square(parameter[param])
+    return np.sqrt(rms / len(parameter))
 
 
-def fastFourier(param):
-    fastFourier = fft(param)
-    paramLen = len(param)
+def calcFFT(parameter):
+    ffourier = fft(parameter)
+    param_len = len(parameter)
+    
     t = 2 / 300
-    amplitude = []
-    frequency = np.linspace(0, paramLen * t, paramLen)
-    for amp in fastFourier:
-        amplitude.append(np.abs(amp))
-    sortedAmplitude = amplitude
-    sortedAmplitude = sorted(sortedAmplitude)
-    max_amplitude = sortedAmplitude[(-2)]
-    max_frequency = frequency.tolist()[amplitude.index(max_amplitude)]
-    return [max_amplitude, max_frequency]
+    ampl = []
+    freq = np.linspace(0, param_len * t, param_len)
+    
+    for amp in ffourier:
+        ampl.append(np.abs(amp))
+
+    sorted_amp = ampl
+    sorted_amp = sorted(sorted_amp)
+    max_amp = sorted_amp[(-2)]
+    max_freq = freq.tolist()[ampl.index(max_amp)]
+    return [max_amp, max_freq]
 
 
 def glucoseFeatures(meal_Nomeal_data):
@@ -162,12 +165,12 @@ def glucoseFeatures(meal_Nomeal_data):
                 "Maximum Value": max(param),
                 "Mean of Absolute Values1": calcAbsMean(param[:13]),
                 "Mean of Absolute Values2": calcAbsMean(param[13:]),
-                "Root Mean Square": rootMeanSquare(param),
+                "Root Mean Square": calcRMS(param),
                 "Entropy": calcGCEntropy(param),
-                "Max FFT Amplitude1": fastFourier(param[:13])[0],
-                "Max FFT Frequency1": fastFourier(param[:13])[1],
-                "Max FFT Amplitude2": fastFourier(param[13:])[0],
-                "Max FFT Frequency2": fastFourier(param[13:])[1],
+                "Max FFT Amplitude1": calcFFT(param[:13])[0],
+                "Max FFT Frequency1": calcFFT(param[:13])[1],
+                "Max FFT Amplitude2": calcFFT(param[13:])[0],
+                "Max FFT Frequency2": calcFFT(param[13:])[1],
             },
             ignore_index=True,
         )
