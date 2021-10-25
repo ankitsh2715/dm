@@ -4,6 +4,7 @@ import pickle_compat
 from train import calcGCFeatures
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
+
 pickle_compat.patch()
 
 with open("Model.pkl", "rb") as file:

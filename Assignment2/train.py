@@ -11,6 +11,55 @@ from sklearn.svm import SVC
 pickle_compat.patch()
 
 
+def calcAbsMean(parameter):
+    abs_mean = 0
+    for param in range(0, len(parameter) - 1):
+        abs_mean = abs_mean + np.abs(parameter[(param + 1)] - parameter[param])
+    return abs_mean / len(parameter)
+
+
+def calcGCEntropy(parameter):
+    len_param = len(parameter)
+    entropy = 0
+    if len_param <= 1:
+        return 0
+    else:
+        value, ctr = np.unique(parameter, return_counts=True)
+        ratio = ctr / len_param
+        ratio_nonzero = np.count_nonzero(ratio)
+        if ratio_nonzero <= 1:
+            return 0
+        for i in ratio:
+            entropy -= i * np.log2(i)
+        return entropy
+
+
+def calcRMS(parameter):
+    rms = 0
+    for param in range(0, len(parameter) - 1):
+
+        rms = rms + np.square(parameter[param])
+    return np.sqrt(rms / len(parameter))
+
+
+def calcFFT(parameter):
+    ffourier = fft(parameter)
+    param_len = len(parameter)
+
+    t = 2 / 300
+    ampl = []
+    freq = np.linspace(0, param_len * t, param_len)
+
+    for amp in ffourier:
+        ampl.append(np.abs(amp))
+
+    sorted_amp = ampl
+    sorted_amp = sorted(sorted_amp)
+    max_amp = sorted_amp[(-2)]
+    max_freq = freq.tolist()[ampl.index(max_amp)]
+    return [max_amp, max_freq]
+
+
 def getNoMealTimes(time, timeDiff):
     times_arr = []
     time1 = time[0 : len(time) - 1]
@@ -52,14 +101,36 @@ def getNoMealData(mealTimes, startTime, endTime, isMealData, gcData):
     return pd.DataFrame(data=mealData_list)
 
 
+def calcGCFeatures(data_meal_nomeal):
+    gc_features = pd.DataFrame()
+    for i in range(0, data_meal_nomeal.shape[0]):
+        param = data_meal_nomeal.iloc[i, :].tolist()
+        gc_features = gc_features.append(
+            {
+                "Minimum Value": min(param),
+                "Maximum Value": max(param),
+                "Mean of Absolute Values1": calcAbsMean(param[:13]),
+                "Mean of Absolute Values2": calcAbsMean(param[13:]),
+                "Root Mean Square": calcRMS(param),
+                "Entropy": calcGCEntropy(param),
+                "Max FFT Amplitude1": calcFFT(param[:13])[0],
+                "Max FFT Frequency1": calcFFT(param[:13])[1],
+                "Max FFT Amplitude2": calcFFT(param[13:])[0],
+                "Max FFT Frequency2": calcFFT(param[13:])[1],
+            },
+            ignore_index=True,
+        )
+    return gc_features
+
+
 def processData(insulinData, gcData):
     meal_data = pd.DataFrame()
     noMeal_data = pd.DataFrame()
     insulinData = insulinData[::-1]
     gcData = gcData[::-1]
-    gcData["Sensor Glucose (mg/dL)"] = gcData[
-        "Sensor Glucose (mg/dL)"
-    ].interpolate(method="linear", limit_direction="both")
+    gcData["Sensor Glucose (mg/dL)"] = gcData["Sensor Glucose (mg/dL)"].interpolate(
+        method="linear", limit_direction="both"
+    )
 
     insulinData["datetime"] = pd.to_datetime(
         insulinData["Date"].astype(str) + " " + insulinData["Time"].astype(str)
@@ -104,77 +175,6 @@ def processData(insulinData, gcData):
     data = pca_meal.append(pca_noMeal)
     data.index = [i for i in range(data.shape[0])]
     return data
-
-
-def calcAbsMean(parameter):
-    abs_mean = 0
-    for param in range(0, len(parameter) - 1):
-        abs_mean = abs_mean + np.abs(parameter[(param + 1)] - parameter[param])
-    return abs_mean / len(parameter)
-
-
-def calcGCEntropy(parameter):
-    len_param = len(parameter)
-    entropy = 0
-    if len_param <= 1:
-        return 0
-    else:
-        value, ctr = np.unique(parameter, return_counts=True)
-        ratio = ctr / len_param
-        ratio_nonzero = np.count_nonzero(ratio)
-        if ratio_nonzero <= 1:
-            return 0
-        for i in ratio:
-            entropy -= i * np.log2(i)
-        return entropy
-
-
-def calcRMS(parameter):
-    rms = 0
-    for param in range(0, len(parameter) - 1):
-
-        rms = rms + np.square(parameter[param])
-    return np.sqrt(rms / len(parameter))
-
-
-def calcFFT(parameter):
-    ffourier = fft(parameter)
-    param_len = len(parameter)
-    
-    t = 2 / 300
-    ampl = []
-    freq = np.linspace(0, param_len * t, param_len)
-    
-    for amp in ffourier:
-        ampl.append(np.abs(amp))
-
-    sorted_amp = ampl
-    sorted_amp = sorted(sorted_amp)
-    max_amp = sorted_amp[(-2)]
-    max_freq = freq.tolist()[ampl.index(max_amp)]
-    return [max_amp, max_freq]
-
-
-def calcGCFeatures(data_meal_nomeal):
-    gc_features = pd.DataFrame()
-    for i in range(0, data_meal_nomeal.shape[0]):
-        param = data_meal_nomeal.iloc[i, :].tolist()
-        gc_features = gc_features.append(
-            {
-                "Minimum Value": min(param),
-                "Maximum Value": max(param),
-                "Mean of Absolute Values1": calcAbsMean(param[:13]),
-                "Mean of Absolute Values2": calcAbsMean(param[13:]),
-                "Root Mean Square": calcRMS(param),
-                "Entropy": calcGCEntropy(param),
-                "Max FFT Amplitude1": calcFFT(param[:13])[0],
-                "Max FFT Frequency1": calcFFT(param[:13])[1],
-                "Max FFT Amplitude2": calcFFT(param[13:])[0],
-                "Max FFT Frequency2": calcFFT(param[13:])[1],
-            },
-            ignore_index=True,
-        )
-    return gc_features
 
 
 if __name__ == "__main__":
