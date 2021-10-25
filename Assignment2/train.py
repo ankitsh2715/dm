@@ -85,8 +85,8 @@ def processData(insulinData, gcData):
 
     meal_data = getNoMealData(meal_times, -0.5, 2, True, processed_gcData)
     noMeal_data = getNoMealData(noMeal_times, 2, 4, False, processed_gcData)
-    features_meal_data = glucoseFeatures(meal_data)
-    features_noMeal_data = glucoseFeatures(noMeal_data)
+    features_meal_data = calcGCFeatures(meal_data)
+    features_noMeal_data = calcGCFeatures(noMeal_data)
 
     ss = StandardScaler()
     ss_meal = ss.fit_transform(features_meal_data)
@@ -155,11 +155,11 @@ def calcFFT(parameter):
     return [max_amp, max_freq]
 
 
-def glucoseFeatures(meal_Nomeal_data):
-    glucoseFeatures = pd.DataFrame()
-    for i in range(0, meal_Nomeal_data.shape[0]):
-        param = meal_Nomeal_data.iloc[i, :].tolist()
-        glucoseFeatures = glucoseFeatures.append(
+def calcGCFeatures(data_meal_nomeal):
+    gc_features = pd.DataFrame()
+    for i in range(0, data_meal_nomeal.shape[0]):
+        param = data_meal_nomeal.iloc[i, :].tolist()
+        gc_features = gc_features.append(
             {
                 "Minimum Value": min(param),
                 "Maximum Value": max(param),
@@ -174,25 +174,26 @@ def glucoseFeatures(meal_Nomeal_data):
             },
             ignore_index=True,
         )
-    return glucoseFeatures
+    return gc_features
 
 
 if __name__ == "__main__":
-    insulin_data_1 = pd.read_csv("Insulin_patient2.csv")
-    glucose_data_1 = pd.read_csv("CGM_patient2.csv")
-    insulin_data_2 = pd.read_csv("InsulinData.csv", low_memory=False)
-    glucose_data_2 = pd.read_csv("CGMData.csv", low_memory=False)
-    insulin_data = pd.concat([insulin_data_1, insulin_data_2])
-    glucose_data = pd.concat([glucose_data_1, glucose_data_2])
-    data = processData(insulin_data, glucose_data)
+    Insulin_patient2 = pd.read_csv("Insulin_patient2.csv")
+    CGM_patient2 = pd.read_csv("CGM_patient2.csv")
+    InsulinData = pd.read_csv("InsulinData.csv", low_memory=False)
+    CGMData = pd.read_csv("CGMData.csv", low_memory=False)
+    insulin_data = pd.concat([Insulin_patient2, InsulinData])
+    gc_data = pd.concat([CGM_patient2, CGMData])
+
+    data = processData(insulin_data, gc_data)
     X = data.iloc[:, :-1]
     Y = data.iloc[:, -1]
 
     model = SVC(kernel="linear", C=1, gamma=0.1)
-    kfold = KFold(5, True, 1)
-    for tr, tst in kfold.split(X, Y):
-        X_train, X_test = X.iloc[tr], X.iloc[tst]
-        Y_train, Y_test = Y.iloc[tr], Y.iloc[tst]
+    k_fold = KFold(5, True, 1)
+    for train, test in k_fold.split(X, Y):
+        X_train, X_test = X.iloc[train], X.iloc[test]
+        Y_train, Y_test = Y.iloc[train], Y.iloc[test]
 
         model.fit(X_train, Y_train)
 
