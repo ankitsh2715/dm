@@ -8,59 +8,62 @@ from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import DBSCAN
 
-insulinData = pd.read_csv('InsulinData.csv', sep=',', low_memory=False)
-insulinData['dateTime'] = pd.to_datetime(insulinData['Date'] + ' ' + insulinData['Time'])
-insulinData = insulinData.sort_values(by='dateTime', ascending=True)
+insulin_data = pd.read_csv('InsulinData.csv', sep=',', low_memory=False)
+insulin_data['dateTime'] = pd.to_datetime(insulin_data['Date'] + ' ' + insulin_data['Time'])
+insulin_data = insulin_data.sort_values(by='dateTime', ascending=True)
 
-cgmData = pd.read_csv('CGMData.csv', sep=',', low_memory=False)
-cgmData['dateTime'] = pd.to_datetime(cgmData['Date'] + ' ' + cgmData['Time'])
-cgmData = cgmData.sort_values(by='dateTime', ascending=True)
+cgm_data = pd.read_csv('CGMData.csv', sep=',', low_memory=False)
+cgm_data['dateTime'] = pd.to_datetime(cgm_data['Date'] + ' ' + cgm_data['Time'])
+cgm_data = cgm_data.sort_values(by='dateTime', ascending=True)
 
-insulinData['New Index'] = range(0, 0 + len(insulinData))
-mealPeriod = insulinData.loc[insulinData['BWZ Carb Input (grams)'] > 0][
+insulin_data['New Index'] = range(0, 0 + len(insulin_data))
+meal_window = insulin_data.loc[insulin_data['BWZ Carb Input (grams)'] > 0][
     ['New Index', 'Date', 'Time', 'BWZ Carb Input (grams)', 'dateTime']]
-mealPeriod['diff'] = mealPeriod['dateTime'].diff(periods=1)
-mealPeriod['shiftUp'] = mealPeriod['diff'].shift(-1)
+meal_window['diff'] = meal_window['dateTime'].diff(periods=1)
+meal_window['shiftUp'] = meal_window['diff'].shift(-1)
 
-mealPeriod = mealPeriod.loc[(mealPeriod['shiftUp'] > datetime.timedelta(minutes=120)) | (pd.isnull(mealPeriod['shiftUp']))]
-mealPeriod
+meal_window = meal_window.loc[(meal_window['shiftUp'] > datetime.timedelta(minutes=120)) | (pd.isnull(meal_window['shiftUp']))]
+meal_window
 
-cgm_Mealdata = pd.DataFrame()
-cgm_Mealdata['New Index'] = ""
-for i in range(len(mealPeriod)):
-    Period_BeforeMeal = mealPeriod['dateTime'].iloc[i] - datetime.timedelta(minutes=30)
-    Period_AfterMeal = mealPeriod['dateTime'].iloc[i] + datetime.timedelta(minutes=120)
-    cgmdata_MealInterval = cgmData.loc[(cgmData['dateTime'] >= Period_BeforeMeal) & (cgmData['dateTime'] < Period_AfterMeal)]
+meal_data_cgm = pd.DataFrame()
+meal_data_cgm['New Index'] = ""
+
+for i in range(len(meal_window)):
+    meal_window_before = meal_window['dateTime'].iloc[i] - datetime.timedelta(minutes=30)
+    meal_window_after = meal_window['dateTime'].iloc[i] + datetime.timedelta(minutes=120)
+    meal_window_cgm_data = cgm_data.loc[(cgm_data['dateTime'] >= meal_window_before) & (cgm_data['dateTime'] < meal_window_after)]
+    
     arr = []
-    index = 0
-    index = mealPeriod['New Index'].iloc[i]
-    for j in range(len(cgmdata_MealInterval)):
-        arr.append(cgmdata_MealInterval['Sensor Glucose (mg/dL)'].iloc[j])
-    cgm_Mealdata = cgm_Mealdata.append(pd.Series(arr), ignore_index=True)
-    cgm_Mealdata.iloc[i, cgm_Mealdata.columns.get_loc('New Index')] = index
-cgm_Mealdata['New Index'] = cgm_Mealdata['New Index'].astype(int)
+    idx = 0
+    idx = meal_window['New Index'].iloc[i]
 
+    for j in range(len(meal_window_cgm_data)):
+        arr.append(meal_window_cgm_data['Sensor Glucose (mg/dL)'].iloc[j])
+
+    meal_data_cgm = meal_data_cgm.append(pd.Series(arr), ignore_index=True)
+    meal_data_cgm.iloc[i, meal_data_cgm.columns.get_loc('New Index')] = idx
+
+meal_data_cgm['New Index'] = meal_data_cgm['New Index'].astype(int)
 cgm_Mealdata_index = pd.DataFrame()
-cgm_Mealdata_index['New Index'] = cgm_Mealdata['New Index']
-# display(cgmdata_withMeal_index)
-cgm_Mealdata = cgm_Mealdata.drop(columns='New Index')
+cgm_Mealdata_index['New Index'] = meal_data_cgm['New Index']
+meal_data_cgm = meal_data_cgm.drop(columns='New Index')
 
 #Interpolation
-total_rows = cgm_Mealdata.shape[0]
-total_columns = cgm_Mealdata.shape[1]
-cgm_Mealdata.dropna(axis=0, how='all', thresh=total_columns / 4, subset=None, inplace=True)
-cgm_Mealdata.dropna(axis=1, how='all', thresh=total_rows / 4, subset=None, inplace=True)
-cgm_Mealdata.interpolate(axis=0, method='linear', limit_direction='forward', inplace=True)
-cgm_Mealdata.bfill(axis=1, inplace=True)
-cgm_NoMealdata_index = cgm_Mealdata.copy()
-cgm_mean = cgm_Mealdata.copy()
+total_rows = meal_data_cgm.shape[0]
+total_columns = meal_data_cgm.shape[1]
+meal_data_cgm.dropna(axis=0, how='all', thresh=total_columns / 4, subset=None, inplace=True)
+meal_data_cgm.dropna(axis=1, how='all', thresh=total_rows / 4, subset=None, inplace=True)
+meal_data_cgm.interpolate(axis=0, method='linear', limit_direction='forward', inplace=True)
+meal_data_cgm.bfill(axis=1, inplace=True)
+cgm_NoMealdata_index = meal_data_cgm.copy()
+cgm_mean = meal_data_cgm.copy()
 
-cgm_Mealdata = pd.merge(cgm_Mealdata, cgm_Mealdata_index, left_index=True, right_index=True)
-cgm_Mealdata['mean CGM data'] = cgm_NoMealdata_index.mean(axis=1)
-cgm_Mealdata['max-start_over_start'] = cgm_NoMealdata_index.max(axis=1) / cgm_NoMealdata_index[
+meal_data_cgm = pd.merge(meal_data_cgm, cgm_Mealdata_index, left_index=True, right_index=True)
+meal_data_cgm['mean CGM data'] = cgm_NoMealdata_index.mean(axis=1)
+meal_data_cgm['max-start_over_start'] = cgm_NoMealdata_index.max(axis=1) / cgm_NoMealdata_index[
     0]
 
-meal_Quantity = mealPeriod[['BWZ Carb Input (grams)', 'New Index']]
+meal_Quantity = meal_window[['BWZ Carb Input (grams)', 'New Index']]
 meal_Quantity = meal_Quantity.rename(columns={'BWZ Carb Input (grams)': 'Meal Amount'})
 max_meal = meal_Quantity['Meal Amount'].max()
 min_meal = meal_Quantity['Meal Amount'].min()
@@ -87,10 +90,10 @@ meal_quantity_label['Bin Label'] = meal_Quantity.apply(lambda row: bin_label(row
                                                        axis=1)
 meal_quantity_label['New Index'] = meal_Quantity['New Index']
 
-meal_data_quantity = cgm_Mealdata.merge(meal_quantity_label, how='inner', on=['New Index'])
+meal_data_quantity = meal_data_cgm.merge(meal_quantity_label, how='inner', on=['New Index'])
 
 meal_carbohydrates_intake_time = pd.DataFrame()
-meal_carbohydrates_intake_time = mealPeriod[['BWZ Carb Input (grams)', 'New Index']]
+meal_carbohydrates_intake_time = meal_window[['BWZ Carb Input (grams)', 'New Index']]
 meal_data_quantity = meal_data_quantity.merge(meal_carbohydrates_intake_time, how='inner', on=['New Index'])
 meal_data_quantity = meal_data_quantity.drop(columns='New Index')
 
