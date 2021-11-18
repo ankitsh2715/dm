@@ -23,8 +23,6 @@ meal_window['diff'] = meal_window['dateTime'].diff(periods=1)
 meal_window['shiftUp'] = meal_window['diff'].shift(-1)
 
 meal_window = meal_window.loc[(meal_window['shiftUp'] > datetime.timedelta(minutes=120)) | (pd.isnull(meal_window['shiftUp']))]
-####
-meal_window
 
 meal_data_cgm = pd.DataFrame()
 meal_data_cgm['New Index'] = ""
@@ -58,15 +56,12 @@ meal_data_cgm.interpolate(axis=0, method='linear', limit_direction='forward', in
 meal_data_cgm.bfill(axis=1, inplace=True)
 
 no_meal_data_cgm_idx = meal_data_cgm.copy()
-#cgm_mean = meal_data_cgm.copy()
 meal_data_cgm = pd.merge(meal_data_cgm, meal_data_cgm_idx, left_index=True, right_index=True)
 meal_data_cgm['mean CGM data'] = no_meal_data_cgm_idx.mean(axis=1)
 meal_data_cgm['max-start_over_start'] = no_meal_data_cgm_idx.max(axis=1) / no_meal_data_cgm_idx[0]
 
 meal_qty = meal_window[['BWZ Carb Input (grams)', 'New Index']]
 meal_qty = meal_qty.rename(columns={'BWZ Carb Input (grams)': 'Meal Amount'})
-# max_value_meal = meal_qty['Meal Amount'].max()
-# min_value_meal = meal_qty['Meal Amount'].min()
 meal_qty_lbl = pd.DataFrame()
 meal_qty_lbl['Bin Label'] = meal_qty.apply(lambda row: get_bin_lbl(row['Meal Amount']).astype(np.int64), axis=1)
 meal_qty_lbl['New Index'] = meal_qty['New Index']
@@ -127,19 +122,11 @@ features_dbscan_arr = features_dbscan.values.astype('float32', copy=False)
 
 dbscan_data_scaler = StandardScaler().fit(features_dbscan_arr)
 features_dbscan_arr = dbscan_data_scaler.transform(features_dbscan_arr)
-###
-features_dbscan_arr
-
 model = DBSCAN(eps=0.19, min_samples=5).fit(features_dbscan_arr)
-#outliers_df = features_dbscan[model.labels_ == -1]
-#clusters_df = features_dbscan[model.labels_ != -1]
 features_carbs['cluster'] = model.labels_
 colors = model.labels_
 colors_clusters = colors[colors != -1]
 color_outliers = 'black'
-
-#clusters = Counter(model.labels_)
-#dbscana = features_dbscan.values.astype('float32', copy=False)
 
 dbscan_bins_clusters = pd.DataFrame({'ground_true_arr': groundTruth_data, 'dbscan_labels': list(model.labels_)},
                                        columns=['ground_true_arr', 'dbscan_labels'])
@@ -198,10 +185,8 @@ for i in squared_error:
     DBSCAN_SSE = DBSCAN_SSE + squared_error[i];
 
 KMeans_DBSCAN = [sse_KMeans, DBSCAN_SSE, entropy_kmeans, dbscan_entropy, KMeans_purity_data, dbscan_purity]
-print_df = pd.DataFrame(KMeans_DBSCAN).T
-###
-print_df
-print_df.to_csv('Results.csv', header=False, index=False)
+results_df = pd.DataFrame(KMeans_DBSCAN).T
+results_df.to_csv('Results.csv', header=False, index=False)
 
 
 # utility methods
