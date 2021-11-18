@@ -23,6 +23,7 @@ meal_window['diff'] = meal_window['dateTime'].diff(periods=1)
 meal_window['shiftUp'] = meal_window['diff'].shift(-1)
 
 meal_window = meal_window.loc[(meal_window['shiftUp'] > datetime.timedelta(minutes=120)) | (pd.isnull(meal_window['shiftUp']))]
+####
 meal_window
 
 meal_data_cgm = pd.DataFrame()
@@ -67,22 +68,6 @@ meal_qty = meal_qty.rename(columns={'BWZ Carb Input (grams)': 'Meal Amount'})
 # max_value_meal = meal_qty['Meal Amount'].max()
 # min_value_meal = meal_qty['Meal Amount'].min()
 meal_qty_lbl = pd.DataFrame()
-
-def get_bin_lbl(x):
-    if (x <= 23):
-        return np.floor(0);
-    elif (x <= 43):
-        return np.floor(1);
-    elif (x <= 63):
-        return np.floor(2);
-    elif (x <= 83):
-        return np.floor(3);
-    elif (x <= 103):
-        return np.floor(4);
-    else:
-        return np.floor(5);
-
-
 meal_qty_lbl['Bin Label'] = meal_qty.apply(lambda row: get_bin_lbl(row['Meal Amount']).astype(np.int64), axis=1)
 meal_qty_lbl['New Index'] = meal_qty['New Index']
 
@@ -114,73 +99,50 @@ sse_KMeans = result.inertia_
 
 features_carbs['cluster'] = y_val_predict
 features_carbs.head()
-
 result.cluster_centers_
 
 groundTruth_data = meal_data_qty["Bin Label"].tolist()
-
 bins_clusters_df = pd.DataFrame({'ground_true_arr': groundTruth_data, 'kmeans_labels': list(y_val_predict)},
                                 columns=['ground_true_arr', 'kmeans_labels'])
 
 confusion_matrix = pd.pivot_table(bins_clusters_df, index='kmeans_labels', columns='ground_true_arr', aggfunc=len)
 confusion_matrix.fillna(value=0, inplace=True)
-
 confusion_matrix = confusion_matrix.reset_index()
 confusion_matrix = confusion_matrix.drop(columns=['kmeans_labels'])
 
 confusion_matrix_copy = confusion_matrix.copy()
-
-
-def row_entropy(row):
-    total = 0
-    entropy = 0
-    for i in range(len(confusion_matrix.columns)):
-        total = total + row[i];
-    for j in range(len(confusion_matrix.columns)):
-        if (row[j] == 0):
-            continue;
-        entropy = entropy + row[j] / total * math.log2(row[j] / total)
-    return -entropy
-
-
 confusion_matrix_copy['Total'] = confusion_matrix.sum(axis=1)
-confusion_matrix_copy['Row_entropy'] = confusion_matrix.apply(lambda row: row_entropy(row), axis=1)
-total_data = confusion_matrix_copy['Total'].sum()
-confusion_matrix_copy['entropy_prob'] = confusion_matrix_copy['Total'] / total_data * confusion_matrix_copy[
+confusion_matrix_copy['Row_entropy'] = confusion_matrix.apply(lambda row: get_entropy(row), axis=1)
+data_sum = confusion_matrix_copy['Total'].sum()
+confusion_matrix_copy['entropy_prob'] = confusion_matrix_copy['Total'] / data_sum * confusion_matrix_copy[
     'Row_entropy']
+
 entropy_kmeans = confusion_matrix_copy['entropy_prob'].sum()
 
 confusion_matrix_copy['Max_val'] = confusion_matrix.max(axis=1)
-KMeans_purity_data = confusion_matrix_copy['Max_val'].sum() / total_data;
+KMeans_purity_data = confusion_matrix_copy['Max_val'].sum() / data_sum;
 
-dbscan_feature = features_carbs.copy()[['BWZ Carb Input (grams)', 'mean CGM data']]
+features_dbscan = features_carbs.copy()[['BWZ Carb Input (grams)', 'mean CGM data']]
+features_dbscan_arr = features_dbscan.values.astype('float32', copy=False)
 
-dbscan_data_feature_arr = dbscan_feature.values.astype('float32', copy=False)
+dbscan_data_scaler = StandardScaler().fit(features_dbscan_arr)
+features_dbscan_arr = dbscan_data_scaler.transform(features_dbscan_arr)
+###
+features_dbscan_arr
 
-dbscan_data_scaler = StandardScaler().fit(dbscan_data_feature_arr)
-dbscan_data_feature_arr = dbscan_data_scaler.transform(dbscan_data_feature_arr)
-dbscan_data_feature_arr
-
-model = DBSCAN(eps=0.19, min_samples=5).fit(dbscan_data_feature_arr)
-
-outliers_df = dbscan_feature[model.labels_ == -1]
-clusters_df = dbscan_feature[model.labels_ != -1]
-
-
+model = DBSCAN(eps=0.19, min_samples=5).fit(features_dbscan_arr)
+#outliers_df = features_dbscan[model.labels_ == -1]
+#clusters_df = features_dbscan[model.labels_ != -1]
 features_carbs['cluster'] = model.labels_
-
 colors = model.labels_
 colors_clusters = colors[colors != -1]
 color_outliers = 'black'
 
-
-clusters = Counter(model.labels_)
-
-dbscana = dbscan_feature.values.astype('float32', copy=False)
+#clusters = Counter(model.labels_)
+#dbscana = features_dbscan.values.astype('float32', copy=False)
 
 bins_clusters_df_dbscan = pd.DataFrame({'ground_true_arr': groundTruth_data, 'dbscan_labels': list(model.labels_)},
                                        columns=['ground_true_arr', 'dbscan_labels'])
-
 
 confusion_matrix_dbscan = pd.pivot_table(bins_clusters_df_dbscan, index='ground_true_arr', columns='dbscan_labels',
                                          aggfunc=len)
@@ -190,29 +152,15 @@ confusion_matrix_dbscan = confusion_matrix_dbscan.drop(columns=['ground_true_arr
 confusion_matrix_dbscan = confusion_matrix_dbscan.drop(columns=[-1])
 confusion_matrix_dbscan_copy = confusion_matrix_dbscan.copy()
 
-
-def row_entropy_dbscan(row):
-    total = 0
-    entropy = 0
-    for i in range(len(confusion_matrix_dbscan.columns)):
-        total = total + row[i];
-
-    for j in range(len(confusion_matrix_dbscan.columns)):
-        if (row[j] == 0):
-            continue;
-        entropy = entropy + row[j] / total * math.log2(row[j] / total)
-    return -entropy
-
-
 confusion_matrix_dbscan_copy['Total'] = confusion_matrix_dbscan.sum(axis=1)
-confusion_matrix_dbscan_copy['Row_entropy'] = confusion_matrix_dbscan.apply(lambda row: row_entropy_dbscan(row), axis=1)
-total_data = confusion_matrix_dbscan_copy['Total'].sum()
-confusion_matrix_dbscan_copy['entropy_prob'] = confusion_matrix_dbscan_copy['Total'] / total_data * \
+confusion_matrix_dbscan_copy['Row_entropy'] = confusion_matrix_dbscan.apply(lambda row: get_entropy_dbscan(row), axis=1)
+data_sum = confusion_matrix_dbscan_copy['Total'].sum()
+confusion_matrix_dbscan_copy['entropy_prob'] = confusion_matrix_dbscan_copy['Total'] / data_sum * \
                                                confusion_matrix_dbscan_copy['Row_entropy']
 DBScan_entropy = confusion_matrix_dbscan_copy['entropy_prob'].sum()
 
 confusion_matrix_dbscan_copy['Max_val'] = confusion_matrix_dbscan.max(axis=1)
-DBSCAN_purity = confusion_matrix_dbscan_copy['Max_val'].sum() / total_data;
+DBSCAN_purity = confusion_matrix_dbscan_copy['Max_val'].sum() / data_sum;
 
 features_carbs = features_carbs.loc[features_carbs['cluster'] != -1]
 
@@ -221,18 +169,13 @@ centroid_carb_input_obj = {}
 centroid_cgm_mean_obj = {}
 squared_error = {}
 DBSCAN_SSE = 0
+
 for i in range(len(confusion_matrix_dbscan.columns)):
     cluster_group = features_carbs.loc[features_carbs['cluster'] == i]
     centroid_carb_input = cluster_group['BWZ Carb Input (grams)'].mean()
     centroid_cgm_mean = cluster_group['mean CGM data'].mean()
     centroid_carb_input_obj[i] = centroid_carb_input
     centroid_cgm_mean_obj[i] = centroid_cgm_mean
-
-def centroid_carb_input_calc(row):
-    return centroid_carb_input_obj[row['cluster']]
-
-def centroid_cgm_mean_calc(row):
-    return centroid_cgm_mean_obj[row['cluster']]
 
 dbscan_feature_extraction_centroid['centroid_carb_input'] = features_carbs.apply(
     lambda row: centroid_carb_input_calc(row), axis=1)
@@ -247,6 +190,7 @@ for i in range(len(dbscan_feature_extraction_centroid)):
         dbscan_feature_extraction_centroid['centroid_carb_input'].iloc[i], 2) + math.pow(
         dbscan_feature_extraction_centroid['mean CGM data'].iloc[i] -
         dbscan_feature_extraction_centroid['centroid_cgm_mean'].iloc[i], 2)
+
 for i in range(len(confusion_matrix_dbscan.columns)):
     squared_error[i] = dbscan_feature_extraction_centroid.loc[dbscan_feature_extraction_centroid['cluster'] == i][
         'centroid_difference'].sum()
@@ -258,3 +202,48 @@ KMeans_DBSCAN = [sse_KMeans, DBSCAN_SSE, entropy_kmeans, DBScan_entropy, KMeans_
 print_df = pd.DataFrame(KMeans_DBSCAN).T
 print_df
 print_df.to_csv('Results.csv', header=False, index=False)
+
+
+# utility methods
+def get_bin_lbl(x):
+    if (x <= 23):
+        return np.floor(0);
+    elif (x <= 43):
+        return np.floor(1);
+    elif (x <= 63):
+        return np.floor(2);
+    elif (x <= 83):
+        return np.floor(3);
+    elif (x <= 103):
+        return np.floor(4);
+    else:
+        return np.floor(5);
+
+def get_entropy(row):
+    sum = 0
+    entropy = 0
+    for i in range(len(confusion_matrix.columns)):
+        sum = sum + row[i];
+    for j in range(len(confusion_matrix.columns)):
+        if (row[j] == 0):
+            continue;
+        entropy = entropy + row[j] / sum * math.log2(row[j] / sum)
+    return -entropy
+
+def get_entropy_dbscan(row):
+    total = 0
+    entropy = 0
+    for i in range(len(confusion_matrix_dbscan.columns)):
+        total = total + row[i];
+
+    for j in range(len(confusion_matrix_dbscan.columns)):
+        if (row[j] == 0):
+            continue;
+        entropy = entropy + row[j] / total * math.log2(row[j] / total)
+    return -entropy
+
+def centroid_carb_input_calc(row):
+    return centroid_carb_input_obj[row['cluster']]
+
+def centroid_cgm_mean_calc(row):
+    return centroid_cgm_mean_obj[row['cluster']]
