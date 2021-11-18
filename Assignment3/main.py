@@ -141,65 +141,65 @@ color_outliers = 'black'
 #clusters = Counter(model.labels_)
 #dbscana = features_dbscan.values.astype('float32', copy=False)
 
-bins_clusters_df_dbscan = pd.DataFrame({'ground_true_arr': groundTruth_data, 'dbscan_labels': list(model.labels_)},
+dbscan_bins_clusters = pd.DataFrame({'ground_true_arr': groundTruth_data, 'dbscan_labels': list(model.labels_)},
                                        columns=['ground_true_arr', 'dbscan_labels'])
 
-confusion_matrix_dbscan = pd.pivot_table(bins_clusters_df_dbscan, index='ground_true_arr', columns='dbscan_labels',
+dbscan_confusion_matrix = pd.pivot_table(dbscan_bins_clusters, index='ground_true_arr', columns='dbscan_labels',
                                          aggfunc=len)
-confusion_matrix_dbscan.fillna(value=0, inplace=True)
-confusion_matrix_dbscan = confusion_matrix_dbscan.reset_index()
-confusion_matrix_dbscan = confusion_matrix_dbscan.drop(columns=['ground_true_arr'])
-confusion_matrix_dbscan = confusion_matrix_dbscan.drop(columns=[-1])
-confusion_matrix_dbscan_copy = confusion_matrix_dbscan.copy()
+dbscan_confusion_matrix.fillna(value=0, inplace=True)
+dbscan_confusion_matrix = dbscan_confusion_matrix.reset_index()
+dbscan_confusion_matrix = dbscan_confusion_matrix.drop(columns=['ground_true_arr'])
+dbscan_confusion_matrix = dbscan_confusion_matrix.drop(columns=[-1])
+dbscan_confusion_matrix_copy = dbscan_confusion_matrix.copy()
 
-confusion_matrix_dbscan_copy['Total'] = confusion_matrix_dbscan.sum(axis=1)
-confusion_matrix_dbscan_copy['Row_entropy'] = confusion_matrix_dbscan.apply(lambda row: get_entropy_dbscan(row), axis=1)
-data_sum = confusion_matrix_dbscan_copy['Total'].sum()
-confusion_matrix_dbscan_copy['entropy_prob'] = confusion_matrix_dbscan_copy['Total'] / data_sum * \
-                                               confusion_matrix_dbscan_copy['Row_entropy']
-DBScan_entropy = confusion_matrix_dbscan_copy['entropy_prob'].sum()
+dbscan_confusion_matrix_copy['Total'] = dbscan_confusion_matrix.sum(axis=1)
+dbscan_confusion_matrix_copy['Row_entropy'] = dbscan_confusion_matrix.apply(lambda row: get_entropy_dbscan(row), axis=1)
+data_sum = dbscan_confusion_matrix_copy['Total'].sum()
+dbscan_confusion_matrix_copy['entropy_prob'] = dbscan_confusion_matrix_copy['Total'] / data_sum * \
+                                               dbscan_confusion_matrix_copy['Row_entropy']
+dbscan_entropy = dbscan_confusion_matrix_copy['entropy_prob'].sum()
 
-confusion_matrix_dbscan_copy['Max_val'] = confusion_matrix_dbscan.max(axis=1)
-DBSCAN_purity = confusion_matrix_dbscan_copy['Max_val'].sum() / data_sum;
+dbscan_confusion_matrix_copy['Max_val'] = dbscan_confusion_matrix.max(axis=1)
+dbscan_purity = dbscan_confusion_matrix_copy['Max_val'].sum() / data_sum;
 
 features_carbs = features_carbs.loc[features_carbs['cluster'] != -1]
 
-dbscan_feature_extraction_centroid = features_carbs.copy()
-centroid_carb_input_obj = {}
-centroid_cgm_mean_obj = {}
+centroid_features_dbscan = features_carbs.copy()
+carb_input_centroid = {}
+cgm_mean_centroid = {}
 squared_error = {}
-DBSCAN_SSE = 0
 
-for i in range(len(confusion_matrix_dbscan.columns)):
+for i in range(len(dbscan_confusion_matrix.columns)):
     cluster_group = features_carbs.loc[features_carbs['cluster'] == i]
     centroid_carb_input = cluster_group['BWZ Carb Input (grams)'].mean()
     centroid_cgm_mean = cluster_group['mean CGM data'].mean()
-    centroid_carb_input_obj[i] = centroid_carb_input
-    centroid_cgm_mean_obj[i] = centroid_cgm_mean
+    carb_input_centroid[i] = centroid_carb_input
+    cgm_mean_centroid[i] = centroid_cgm_mean
 
-dbscan_feature_extraction_centroid['centroid_carb_input'] = features_carbs.apply(
+centroid_features_dbscan['centroid_carb_input'] = features_carbs.apply(
     lambda row: centroid_carb_input_calc(row), axis=1)
-dbscan_feature_extraction_centroid['centroid_cgm_mean'] = features_carbs.apply(
+centroid_features_dbscan['centroid_cgm_mean'] = features_carbs.apply(
     lambda row: centroid_cgm_mean_calc(row), axis=1)
+centroid_features_dbscan['centroid_difference'] = 0
 
-dbscan_feature_extraction_centroid['centroid_difference'] = 0
+for i in range(len(centroid_features_dbscan)):
+    centroid_features_dbscan['centroid_difference'].iloc[i] = math.pow(
+        centroid_features_dbscan['BWZ Carb Input (grams)'].iloc[i] -
+        centroid_features_dbscan['centroid_carb_input'].iloc[i], 2) + math.pow(
+        centroid_features_dbscan['mean CGM data'].iloc[i] -
+        centroid_features_dbscan['centroid_cgm_mean'].iloc[i], 2)
 
-for i in range(len(dbscan_feature_extraction_centroid)):
-    dbscan_feature_extraction_centroid['centroid_difference'].iloc[i] = math.pow(
-        dbscan_feature_extraction_centroid['BWZ Carb Input (grams)'].iloc[i] -
-        dbscan_feature_extraction_centroid['centroid_carb_input'].iloc[i], 2) + math.pow(
-        dbscan_feature_extraction_centroid['mean CGM data'].iloc[i] -
-        dbscan_feature_extraction_centroid['centroid_cgm_mean'].iloc[i], 2)
-
-for i in range(len(confusion_matrix_dbscan.columns)):
-    squared_error[i] = dbscan_feature_extraction_centroid.loc[dbscan_feature_extraction_centroid['cluster'] == i][
+for i in range(len(dbscan_confusion_matrix.columns)):
+    squared_error[i] = centroid_features_dbscan.loc[centroid_features_dbscan['cluster'] == i][
         'centroid_difference'].sum()
 
+DBSCAN_SSE = 0
 for i in squared_error:
     DBSCAN_SSE = DBSCAN_SSE + squared_error[i];
 
-KMeans_DBSCAN = [sse_KMeans, DBSCAN_SSE, entropy_kmeans, DBScan_entropy, KMeans_purity_data, DBSCAN_purity]
+KMeans_DBSCAN = [sse_KMeans, DBSCAN_SSE, entropy_kmeans, dbscan_entropy, KMeans_purity_data, dbscan_purity]
 print_df = pd.DataFrame(KMeans_DBSCAN).T
+###
 print_df
 print_df.to_csv('Results.csv', header=False, index=False)
 
@@ -233,17 +233,17 @@ def get_entropy(row):
 def get_entropy_dbscan(row):
     total = 0
     entropy = 0
-    for i in range(len(confusion_matrix_dbscan.columns)):
+    for i in range(len(dbscan_confusion_matrix.columns)):
         total = total + row[i];
 
-    for j in range(len(confusion_matrix_dbscan.columns)):
+    for j in range(len(dbscan_confusion_matrix.columns)):
         if (row[j] == 0):
             continue;
         entropy = entropy + row[j] / total * math.log2(row[j] / total)
     return -entropy
 
 def centroid_carb_input_calc(row):
-    return centroid_carb_input_obj[row['cluster']]
+    return carb_input_centroid[row['cluster']]
 
 def centroid_cgm_mean_calc(row):
-    return centroid_cgm_mean_obj[row['cluster']]
+    return cgm_mean_centroid[row['cluster']]
