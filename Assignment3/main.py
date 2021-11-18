@@ -44,34 +44,31 @@ for i in range(len(meal_window)):
     meal_data_cgm.iloc[i, meal_data_cgm.columns.get_loc('New Index')] = idx
 
 meal_data_cgm['New Index'] = meal_data_cgm['New Index'].astype(int)
-cgm_Mealdata_index = pd.DataFrame()
-cgm_Mealdata_index['New Index'] = meal_data_cgm['New Index']
+meal_data_cgm_idx = pd.DataFrame()
+meal_data_cgm_idx['New Index'] = meal_data_cgm['New Index']
 meal_data_cgm = meal_data_cgm.drop(columns='New Index')
 
-#Interpolation
 total_rows = meal_data_cgm.shape[0]
 total_columns = meal_data_cgm.shape[1]
+
 meal_data_cgm.dropna(axis=0, how='all', thresh=total_columns / 4, subset=None, inplace=True)
 meal_data_cgm.dropna(axis=1, how='all', thresh=total_rows / 4, subset=None, inplace=True)
 meal_data_cgm.interpolate(axis=0, method='linear', limit_direction='forward', inplace=True)
 meal_data_cgm.bfill(axis=1, inplace=True)
-cgm_NoMealdata_index = meal_data_cgm.copy()
-cgm_mean = meal_data_cgm.copy()
 
-meal_data_cgm = pd.merge(meal_data_cgm, cgm_Mealdata_index, left_index=True, right_index=True)
-meal_data_cgm['mean CGM data'] = cgm_NoMealdata_index.mean(axis=1)
-meal_data_cgm['max-start_over_start'] = cgm_NoMealdata_index.max(axis=1) / cgm_NoMealdata_index[
-    0]
+no_meal_data_cgm_idx = meal_data_cgm.copy()
+#cgm_mean = meal_data_cgm.copy()
+meal_data_cgm = pd.merge(meal_data_cgm, meal_data_cgm_idx, left_index=True, right_index=True)
+meal_data_cgm['mean CGM data'] = no_meal_data_cgm_idx.mean(axis=1)
+meal_data_cgm['max-start_over_start'] = no_meal_data_cgm_idx.max(axis=1) / no_meal_data_cgm_idx[0]
 
-meal_Quantity = meal_window[['BWZ Carb Input (grams)', 'New Index']]
-meal_Quantity = meal_Quantity.rename(columns={'BWZ Carb Input (grams)': 'Meal Amount'})
-max_meal = meal_Quantity['Meal Amount'].max()
-min_meal = meal_Quantity['Meal Amount'].min()
+meal_qty = meal_window[['BWZ Carb Input (grams)', 'New Index']]
+meal_qty = meal_qty.rename(columns={'BWZ Carb Input (grams)': 'Meal Amount'})
+# max_value_meal = meal_qty['Meal Amount'].max()
+# min_value_meal = meal_qty['Meal Amount'].min()
+meal_qty_lbl = pd.DataFrame()
 
-meal_quantity_label = pd.DataFrame()
-
-
-def bin_label(x):
+def get_bin_lbl(x):
     if (x <= 23):
         return np.floor(0);
     elif (x <= 43):
@@ -86,11 +83,11 @@ def bin_label(x):
         return np.floor(5);
 
 
-meal_quantity_label['Bin Label'] = meal_Quantity.apply(lambda row: bin_label(row['Meal Amount']).astype(np.int64),
+meal_qty_lbl['Bin Label'] = meal_qty.apply(lambda row: get_bin_lbl(row['Meal Amount']).astype(np.int64),
                                                        axis=1)
-meal_quantity_label['New Index'] = meal_Quantity['New Index']
+meal_qty_lbl['New Index'] = meal_qty['New Index']
 
-meal_data_quantity = meal_data_cgm.merge(meal_quantity_label, how='inner', on=['New Index'])
+meal_data_quantity = meal_data_cgm.merge(meal_qty_lbl, how='inner', on=['New Index'])
 
 meal_carbohydrates_intake_time = pd.DataFrame()
 meal_carbohydrates_intake_time = meal_window[['BWZ Carb Input (grams)', 'New Index']]
