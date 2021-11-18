@@ -7,6 +7,54 @@ from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import DBSCAN
 
+
+def get_entropy(row):
+    sum = 0
+    entropy = 0
+    for i in range(len(confusion_matrix.columns)):
+        sum = sum + row[i]
+    for j in range(len(confusion_matrix.columns)):
+        if row[j] == 0:
+            continue
+        entropy = entropy + row[j] / sum * math.log(row[j]/sum,2)
+    return -entropy
+
+
+def get_bin_lbl(x):
+    if x <= 23:
+        return np.floor(0)
+    elif x <= 43:
+        return np.floor(1)
+    elif x <= 63:
+        return np.floor(2)
+    elif x <= 83:
+        return np.floor(3)
+    elif x <= 103:
+        return np.floor(4)
+    else:
+        return np.floor(5)
+
+
+def get_entropy_dbscan(row):
+    total = 0
+    entropy = 0
+    for i in range(len(dbscan_confusion_matrix.columns)):
+        total = total + row[i]
+
+    for j in range(len(dbscan_confusion_matrix.columns)):
+        if row[j] == 0:
+            continue
+        entropy = entropy + row[j] / total * math.log(row[j]/total,2)
+    return -entropy
+
+
+def centroid_carb_input_calc(row):
+    return carb_input_centroid[row["cluster"]]
+
+
+def centroid_cgm_mean_calc(row):
+    return cgm_mean_centroid[row["cluster"]]
+
 insulin_data = pd.read_csv("InsulinData.csv", sep=",", low_memory=False)
 insulin_data["dateTime"] = pd.to_datetime(
     insulin_data["Date"] + " " + insulin_data["Time"]
@@ -107,9 +155,9 @@ KMeans_val = KMeans_val.values.astype("float32", copy=False)
 KMeans_data = StandardScaler().fit(KMeans_val)
 scaler_features = KMeans_data.transform(KMeans_val)
 
-KMeans = range(1, 16)
+range_KMeans = range(1, 16)
 sse = []
-for k in KMeans:
+for k in range_KMeans:
     test_features = KMeans(n_clusters=k)
     test_features.fit(scaler_features)
     sse.append(test_features.inertia_)
@@ -242,52 +290,3 @@ KMeans_DBSCAN = [
 ]
 results_df = pd.DataFrame(KMeans_DBSCAN).T
 results_df.to_csv("Results.csv", header=False, index=False)
-
-
-# utility methods
-def get_bin_lbl(x):
-    if x <= 23:
-        return np.floor(0)
-    elif x <= 43:
-        return np.floor(1)
-    elif x <= 63:
-        return np.floor(2)
-    elif x <= 83:
-        return np.floor(3)
-    elif x <= 103:
-        return np.floor(4)
-    else:
-        return np.floor(5)
-
-
-def get_entropy(row):
-    sum = 0
-    entropy = 0
-    for i in range(len(confusion_matrix.columns)):
-        sum = sum + row[i]
-    for j in range(len(confusion_matrix.columns)):
-        if row[j] == 0:
-            continue
-        entropy = entropy + row[j] / sum * math.log2(row[j] / sum)
-    return -entropy
-
-
-def get_entropy_dbscan(row):
-    total = 0
-    entropy = 0
-    for i in range(len(dbscan_confusion_matrix.columns)):
-        total = total + row[i]
-
-    for j in range(len(dbscan_confusion_matrix.columns)):
-        if row[j] == 0:
-            continue
-        entropy = entropy + row[j] / total * math.log2(row[j] / total)
-    return -entropy
-
-
-def centroid_carb_input_calc(row):
-    return carb_input_centroid[row["cluster"]]
-
-
-def centroid_cgm_mean_calc(row):
-    return cgm_mean_centroid[row["cluster"]]
