@@ -1,20 +1,12 @@
-import pandas as pd
 import numpy as np
-import datetime
+import pandas as pd
 import math
+import datetime
 from collections import Counter
-from scipy.stats import skew
-from scipy.fftpack import fft
-from sklearn.preprocessing import StandardScaler
-from sklearn.cluster import KMeans
-from sklearn.cluster import DBSCAN
-from sklearn import metrics
-import statistics
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.metrics import accuracy_score
-from sklearn.model_selection import cross_validate, train_test_split, StratifiedKFold, KFold
 
-import pickle
+from sklearn.cluster import KMeans
+from sklearn.preprocessing import StandardScaler
+from sklearn.cluster import DBSCAN
 
 insulinData = pd.read_csv('InsulinData.csv', sep=',', low_memory=False)
 insulinData['dateTime'] = pd.to_datetime(insulinData['Date'] + ' ' + insulinData['Time'])
