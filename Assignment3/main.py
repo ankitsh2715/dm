@@ -83,78 +83,77 @@ def get_bin_lbl(x):
         return np.floor(5);
 
 
-meal_qty_lbl['Bin Label'] = meal_qty.apply(lambda row: get_bin_lbl(row['Meal Amount']).astype(np.int64),
-                                                       axis=1)
+meal_qty_lbl['Bin Label'] = meal_qty.apply(lambda row: get_bin_lbl(row['Meal Amount']).astype(np.int64), axis=1)
 meal_qty_lbl['New Index'] = meal_qty['New Index']
 
-meal_data_quantity = meal_data_cgm.merge(meal_qty_lbl, how='inner', on=['New Index'])
+meal_data_qty = meal_data_cgm.merge(meal_qty_lbl, how='inner', on=['New Index'])
 
-meal_carbohydrates_intake_time = pd.DataFrame()
-meal_carbohydrates_intake_time = meal_window[['BWZ Carb Input (grams)', 'New Index']]
-meal_data_quantity = meal_data_quantity.merge(meal_carbohydrates_intake_time, how='inner', on=['New Index'])
-meal_data_quantity = meal_data_quantity.drop(columns='New Index')
+meal_carbs_intake_period = pd.DataFrame()
+meal_carbs_intake_period = meal_window[['BWZ Carb Input (grams)', 'New Index']]
+meal_data_qty = meal_data_qty.merge(meal_carbs_intake_period, how='inner', on=['New Index'])
+meal_data_qty = meal_data_qty.drop(columns='New Index')
 
-carb_feature_extraction = pd.DataFrame()
-carb_feature_extraction = meal_data_quantity[['BWZ Carb Input (grams)', 'mean CGM data']]
+features_carbs = pd.DataFrame()
+features_carbs = meal_data_qty[['BWZ Carb Input (grams)', 'mean CGM data']]
 
-kmeans_value = carb_feature_extraction.copy()
-kmeans_value = kmeans_value.values.astype('float32', copy=False)
-kmeans_data = StandardScaler().fit(kmeans_value)
-Feature_extraction_scaler = kmeans_data.transform(kmeans_value)
+KMeans_val = features_carbs.copy()
+KMeans_val = KMeans_val.values.astype('float32', copy=False)
+KMeans_data = StandardScaler().fit(KMeans_val)
+scaler_features = KMeans_data.transform(KMeans_val)
 
-kmeans_range = range(1, 16)
+KMeans = range(1, 16)
 sse = []
-for k in kmeans_range:
-    kmeans_feature_test = KMeans(n_clusters=k)
-    kmeans_feature_test.fit(Feature_extraction_scaler)
-    sse.append(kmeans_feature_test.inertia_)
+for k in KMeans:
+    test_features = KMeans(n_clusters=k)
+    test_features.fit(scaler_features)
+    sse.append(test_features.inertia_)
 
-kmeans_result = KMeans(n_clusters=10)
-kmeans_predictionvalue_y = kmeans_result.fit_predict(Feature_extraction_scaler)
-KMeans_sse = kmeans_result.inertia_
+result = KMeans(n_clusters=10)
+y_val_predict = result.fit_predict(scaler_features)
+sse_KMeans = result.inertia_
 
-carb_feature_extraction['cluster'] = kmeans_predictionvalue_y
-carb_feature_extraction.head()
+features_carbs['cluster'] = y_val_predict
+features_carbs.head()
 
-kmeans_result.cluster_centers_
+result.cluster_centers_
 
-ground_truthdata_array = meal_data_quantity["Bin Label"].tolist()
+groundTruth_data = meal_data_qty["Bin Label"].tolist()
 
-bins_clusters_df = pd.DataFrame({'ground_true_arr': ground_truthdata_array, 'kmeans_labels': list(kmeans_predictionvalue_y)},
+bins_clusters_df = pd.DataFrame({'ground_true_arr': groundTruth_data, 'kmeans_labels': list(y_val_predict)},
                                 columns=['ground_true_arr', 'kmeans_labels'])
 
-confusion_matrix_data = pd.pivot_table(bins_clusters_df, index='kmeans_labels', columns='ground_true_arr', aggfunc=len)
-confusion_matrix_data.fillna(value=0, inplace=True)
+confusion_matrix = pd.pivot_table(bins_clusters_df, index='kmeans_labels', columns='ground_true_arr', aggfunc=len)
+confusion_matrix.fillna(value=0, inplace=True)
 
-confusion_matrix_data = confusion_matrix_data.reset_index()
-confusion_matrix_data = confusion_matrix_data.drop(columns=['kmeans_labels'])
+confusion_matrix = confusion_matrix.reset_index()
+confusion_matrix = confusion_matrix.drop(columns=['kmeans_labels'])
 
-confusion_matrix_copy = confusion_matrix_data.copy()
+confusion_matrix_copy = confusion_matrix.copy()
 
 
 def row_entropy(row):
     total = 0
     entropy = 0
-    for i in range(len(confusion_matrix_data.columns)):
+    for i in range(len(confusion_matrix.columns)):
         total = total + row[i];
-    for j in range(len(confusion_matrix_data.columns)):
+    for j in range(len(confusion_matrix.columns)):
         if (row[j] == 0):
             continue;
         entropy = entropy + row[j] / total * math.log2(row[j] / total)
     return -entropy
 
 
-confusion_matrix_copy['Total'] = confusion_matrix_data.sum(axis=1)
-confusion_matrix_copy['Row_entropy'] = confusion_matrix_data.apply(lambda row: row_entropy(row), axis=1)
+confusion_matrix_copy['Total'] = confusion_matrix.sum(axis=1)
+confusion_matrix_copy['Row_entropy'] = confusion_matrix.apply(lambda row: row_entropy(row), axis=1)
 total_data = confusion_matrix_copy['Total'].sum()
 confusion_matrix_copy['entropy_prob'] = confusion_matrix_copy['Total'] / total_data * confusion_matrix_copy[
     'Row_entropy']
 entropy_kmeans = confusion_matrix_copy['entropy_prob'].sum()
 
-confusion_matrix_copy['Max_val'] = confusion_matrix_data.max(axis=1)
+confusion_matrix_copy['Max_val'] = confusion_matrix.max(axis=1)
 KMeans_purity_data = confusion_matrix_copy['Max_val'].sum() / total_data;
 
-dbscan_feature = carb_feature_extraction.copy()[['BWZ Carb Input (grams)', 'mean CGM data']]
+dbscan_feature = features_carbs.copy()[['BWZ Carb Input (grams)', 'mean CGM data']]
 
 dbscan_data_feature_arr = dbscan_feature.values.astype('float32', copy=False)
 
@@ -168,7 +167,7 @@ outliers_df = dbscan_feature[model.labels_ == -1]
 clusters_df = dbscan_feature[model.labels_ != -1]
 
 
-carb_feature_extraction['cluster'] = model.labels_
+features_carbs['cluster'] = model.labels_
 
 colors = model.labels_
 colors_clusters = colors[colors != -1]
@@ -179,7 +178,7 @@ clusters = Counter(model.labels_)
 
 dbscana = dbscan_feature.values.astype('float32', copy=False)
 
-bins_clusters_df_dbscan = pd.DataFrame({'ground_true_arr': ground_truthdata_array, 'dbscan_labels': list(model.labels_)},
+bins_clusters_df_dbscan = pd.DataFrame({'ground_true_arr': groundTruth_data, 'dbscan_labels': list(model.labels_)},
                                        columns=['ground_true_arr', 'dbscan_labels'])
 
 
@@ -215,15 +214,15 @@ DBScan_entropy = confusion_matrix_dbscan_copy['entropy_prob'].sum()
 confusion_matrix_dbscan_copy['Max_val'] = confusion_matrix_dbscan.max(axis=1)
 DBSCAN_purity = confusion_matrix_dbscan_copy['Max_val'].sum() / total_data;
 
-carb_feature_extraction = carb_feature_extraction.loc[carb_feature_extraction['cluster'] != -1]
+features_carbs = features_carbs.loc[features_carbs['cluster'] != -1]
 
-dbscan_feature_extraction_centroid = carb_feature_extraction.copy()
+dbscan_feature_extraction_centroid = features_carbs.copy()
 centroid_carb_input_obj = {}
 centroid_cgm_mean_obj = {}
 squared_error = {}
 DBSCAN_SSE = 0
 for i in range(len(confusion_matrix_dbscan.columns)):
-    cluster_group = carb_feature_extraction.loc[carb_feature_extraction['cluster'] == i]
+    cluster_group = features_carbs.loc[features_carbs['cluster'] == i]
     centroid_carb_input = cluster_group['BWZ Carb Input (grams)'].mean()
     centroid_cgm_mean = cluster_group['mean CGM data'].mean()
     centroid_carb_input_obj[i] = centroid_carb_input
@@ -235,9 +234,9 @@ def centroid_carb_input_calc(row):
 def centroid_cgm_mean_calc(row):
     return centroid_cgm_mean_obj[row['cluster']]
 
-dbscan_feature_extraction_centroid['centroid_carb_input'] = carb_feature_extraction.apply(
+dbscan_feature_extraction_centroid['centroid_carb_input'] = features_carbs.apply(
     lambda row: centroid_carb_input_calc(row), axis=1)
-dbscan_feature_extraction_centroid['centroid_cgm_mean'] = carb_feature_extraction.apply(
+dbscan_feature_extraction_centroid['centroid_cgm_mean'] = features_carbs.apply(
     lambda row: centroid_cgm_mean_calc(row), axis=1)
 
 dbscan_feature_extraction_centroid['centroid_difference'] = 0
@@ -255,7 +254,7 @@ for i in range(len(confusion_matrix_dbscan.columns)):
 for i in squared_error:
     DBSCAN_SSE = DBSCAN_SSE + squared_error[i];
 
-KMeans_DBSCAN = [KMeans_sse, DBSCAN_SSE, entropy_kmeans, DBScan_entropy, KMeans_purity_data, DBSCAN_purity]
+KMeans_DBSCAN = [sse_KMeans, DBSCAN_SSE, entropy_kmeans, DBScan_entropy, KMeans_purity_data, DBSCAN_purity]
 print_df = pd.DataFrame(KMeans_DBSCAN).T
 print_df
 print_df.to_csv('Results.csv', header=False, index=False)
