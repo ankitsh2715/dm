@@ -147,55 +147,59 @@ def glucoseEntropy(val):
         return entropy
 
 
-def rootMeanSquare(param):
-    rootMeanSquare = 0
-    for p in range(0, len(param) - 1):
-        rootMeanSquare = rootMeanSquare + np.square(param[p])
-        
-    return np.sqrt(rootMeanSquare / len(param))
+def rootMeanSquare(val):
+    rms = 0
+    for p in range(0, len(val) - 1):
+        rms = rms + np.square(val[p])
+
+    return np.sqrt(rms / len(val))
 
 
-def fastFourier(param):
-    fastFourier = fft(param)
-    paramLen = len(param)
+def fastFourierTransform(val):
+    ff = fft(val)
+    val_size = len(val)
     t = 2 / 300
-    amplitude = []
-    frequency = np.linspace(0, paramLen * t, paramLen)
-    for amp in fastFourier:
-        amplitude.append(np.abs(amp))
-    sortedAmplitude = amplitude
-    sortedAmplitude = sorted(sortedAmplitude)
-    max_amplitude = sortedAmplitude[(-2)]
-    max_frequency = frequency.tolist()[amplitude.index(max_amplitude)]
-    return [max_amplitude, max_frequency]
+    amp = []
+    freq = np.linspace(0, val_size * t, val_size)
+
+    for amp in ff:
+        amp.append(np.abs(amp))
+    
+    amp_copy = amp
+    sorted_amp = sorted(amp_copy)
+    max_amp = sorted_amp[(-2)]
+    max_freq = freq.tolist()[amp.index(max_amp)]
+    
+    return [max_amp, max_freq]
 
 
-def glucoseFeatures(meal_Nomeal_data):
-    glucoseFeatures = pd.DataFrame()
-    for i in range(0, meal_Nomeal_data.shape[0]):
-        param = meal_Nomeal_data.iloc[i, :].tolist()
-        glucoseFeatures = glucoseFeatures.append(
+def getGlucoseFeatures(meal_nomeal_data):
+    gc_features = pd.DataFrame()
+    
+    for i in range(0, meal_nomeal_data.shape[0]):
+        meal_nomeal_list = meal_nomeal_data.iloc[i, :].tolist()
+        gc_features = gc_features.append(
             {
-                "Minimum Value": min(param),
-                "Maximum Value": max(param),
-                "Mean of Absolute Values1": absoluteValueMean(param[:13]),
-                "Mean of Absolute Values2": absoluteValueMean(param[13:]),
+                "Minimum Value": min(meal_nomeal_list),
+                "Maximum Value": max(meal_nomeal_list),
+                "Mean of Absolute Values1": absoluteValueMean(meal_nomeal_list[:13]),
+                "Mean of Absolute Values2": absoluteValueMean(meal_nomeal_list[13:]),
                 "Max_Zero_Crossing": fn_zero_crossings(
-                    param, meal_Nomeal_data.shape[1]
+                    meal_nomeal_list, meal_nomeal_data.shape[1]
                 )[0],
                 "Zero_Crossing_Rate": fn_zero_crossings(
-                    param, meal_Nomeal_data.shape[1]
+                    meal_nomeal_list, meal_nomeal_data.shape[1]
                 )[1],
-                "Root Mean Square": rootMeanSquare(param),
-                "Entropy": rootMeanSquare(param),
-                "Max FFT Amplitude1": fastFourier(param[:13])[0],
-                "Max FFT Frequency1": fastFourier(param[:13])[1],
-                "Max FFT Amplitude2": fastFourier(param[13:])[0],
-                "Max FFT Frequency2": fastFourier(param[13:])[1],
+                "Root Mean Square": rootMeanSquare(meal_nomeal_list),
+                "Entropy": rootMeanSquare(meal_nomeal_list),
+                "Max FFT Amplitude1": fastFourierTransform(meal_nomeal_list[:13])[0],
+                "Max FFT Frequency1": fastFourierTransform(meal_nomeal_list[:13])[1],
+                "Max FFT Amplitude2": fastFourierTransform(meal_nomeal_list[13:])[0],
+                "Max FFT Frequency2": fastFourierTransform(meal_nomeal_list[13:])[1],
             },
             ignore_index=True,
         )
-    return glucoseFeatures
+    return gc_features
 
 
 def fn_zero_crossings(row, xAxis):
@@ -224,7 +228,7 @@ def fn_zero_crossings(row, xAxis):
 
 
 def getFeatures(mealData):
-    mealDataFeatures = glucoseFeatures(mealData.iloc[:, :-1])
+    mealDataFeatures = getGlucoseFeatures(mealData.iloc[:, :-1])
 
     stdScaler = StandardScaler()
     meal_std = stdScaler.fit_transform(mealDataFeatures)
