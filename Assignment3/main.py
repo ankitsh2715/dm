@@ -13,7 +13,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import DBSCAN
 
 
-def processMealData(meal_time, start_time, end_time, insulin_level, processed_gluc_data):
+def processMealDataHelper(meal_time, start_time, end_time, insulin_level, processed_gluc_data):
     new_meal_data = []
 
     for j, mTime in enumerate(meal_time):
@@ -93,52 +93,57 @@ def getMealtimes(insulin_data):
             continue
     return meal_time_res, insulin_lvl
 
-def processData(insulin_data, glucose_data):
-    mealData = pd.DataFrame()
+def processMealData(insulin_data, glucose_data):
+    meal_data = pd.DataFrame()
     glucose_data["Sensor Glucose (mg/dL)"] = glucose_data[
         "Sensor Glucose (mg/dL)"
     ].interpolate(method="linear", limit_direction="both")
     insulin_data = insulin_data[::-1]
     glucose_data = glucose_data[::-1]
+
     insulin_data["datetime"] = insulin_data["Date"] + " " + insulin_data["Time"]
     insulin_data["datetime"] = pd.to_datetime(insulin_data["datetime"])
     glucose_data["datetime"] = glucose_data["Date"] + " " + glucose_data["Time"]
     glucose_data["datetime"] = pd.to_datetime(insulin_data["datetime"])
 
-    new_insulin_data = insulin_data[["datetime", "BWZ Carb Input (grams)"]]
-    new_glucose_data = glucose_data[["datetime", "Sensor Glucose (mg/dL)"]]
-
-    new_insulin_data1 = new_insulin_data[
-        (new_insulin_data["BWZ Carb Input (grams)"] > 0)
+    insulin_data_filter = insulin_data[["datetime", "BWZ Carb Input (grams)"]]
+    insulin_data_final = insulin_data_filter[
+        (insulin_data_filter["BWZ Carb Input (grams)"] > 0)
     ]
-    mealTimes, insulinLevels = getMealtimes(new_insulin_data1)
-    mealData, new_insulinLevels = processMealData(
-        mealTimes, -0.5, 2, insulinLevels, new_glucose_data
+    gc_data_filter = glucose_data[["datetime", "Sensor Glucose (mg/dL)"]]
+
+    mealTimes, insulinLevels = getMealtimes(insulin_data_final)
+    meal_data, new_insulinLevels = processMealDataHelper(
+        mealTimes, -0.5, 2, insulinLevels, gc_data_filter
     )
 
-    return mealData, new_insulinLevels
+    return meal_data, new_insulinLevels
 
 
-def absoluteValueMean(param):
-    meanValue = 0
-    for p in range(0, len(param) - 1):
-        meanValue = meanValue + np.abs(param[(p + 1)] - param[p])
-    return meanValue / len(param)
+def absoluteValueMean(val):
+    abs_mean = 0
+    for p in range(0, len(val) - 1):
+        abs_mean = abs_mean + np.abs(val[(p + 1)] - val[p])
+    return abs_mean / len(val)
 
 
-def glucoseEntropy(param):
-    paramLen = len(param)
+def glucoseEntropy(val):
     entropy = 0
-    if paramLen <= 1:
+    val_size = len(val)
+    
+    if val_size <= 1:
         return 0
     else:
-        value, count = np.unique(param, return_counts=True)
-        ratio = count / paramLen
-        nonZero_ratio = np.count_nonzero(ratio)
-        if nonZero_ratio <= 1:
+        value, count = np.unique(val, return_counts=True)
+        ratio = count / val_size
+        non_zero_ratio = np.count_nonzero(ratio)
+        
+        if non_zero_ratio <= 1:
             return 0
+        
         for i in ratio:
             entropy -= i * np.log2(i)
+
         return entropy
 
 
@@ -283,7 +288,7 @@ if __name__ == "__main__":
     insulin_data = pd.read_csv("InsulinData.csv", low_memory=False)
     glucose_data = pd.read_csv("CGMData.csv", low_memory=False)
 
-    patient_data, insulinLevels = processData(insulin_data, glucose_data)
+    patient_data, insulinLevels = processMealData(insulin_data, glucose_data)
 
     meal_pca = getFeatures(patient_data)
 
