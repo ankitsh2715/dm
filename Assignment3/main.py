@@ -93,6 +93,7 @@ def getMealtimes(insulin_data):
             continue
     return meal_time_res, insulin_lvl
 
+
 def processMealData(insulin_data, glucose_data):
     meal_data = pd.DataFrame()
     glucose_data["Sensor Glucose (mg/dL)"] = glucose_data[
@@ -146,7 +147,6 @@ def glucoseEntropy(val):
 
         return entropy
 
-
 def rootMeanSquare(val):
     rms = 0
     for p in range(0, len(val) - 1):
@@ -156,23 +156,20 @@ def rootMeanSquare(val):
 
 
 def fastFourierTransform(val):
-    ff = fft(val)
-    val_size = len(val)
+    ffourier = fft(val)
+    val_len = len(val)
     t = 2 / 300
-    amp = []
-    freq = np.linspace(0, val_size * t, val_size)
-
-    for amp in ff:
-        amp.append(np.abs(amp))
-    
-    amp_copy = amp
-    sorted_amp = sorted(amp_copy)
+    freq = []
+    frequency = np.linspace(0, val_len * t, val_len)
+    for amp in ffourier:
+        freq.append(np.abs(amp))
+    sorted_amp = freq
+    sorted_amp = sorted(sorted_amp)
     max_amp = sorted_amp[(-2)]
-    max_freq = freq.tolist()[amp.index(max_amp)]
-    
+    max_freq = frequency.tolist()[freq.index(max_amp)]
     return [max_amp, max_freq]
 
-
+arr = [0.72,2.88, 2.30]
 def zeroCrossings(row, xAxis):
     slopes = [0]
     zero_cross = list()
@@ -241,7 +238,7 @@ def extractFeatures(meal_data):
     return pca_meal
 
 
-def caluculateEntropy(bins):
+def calculateEntropy(bins):
     meal_entropy = []
 
     for bin_val in bins:
@@ -282,7 +279,7 @@ def calculateDBScanSSE(dbscan_sse, centroid, meal_pca):
 
 def groundTruthClusterMatrix(ground_truth, clusters, k_val):
     clusterMatrix = np.zeros((k_val, k_val))
-    
+
     for i, j in enumerate(ground_truth):
         temp1 = j
         temp2 = clusters[i]
@@ -296,94 +293,90 @@ if __name__ == "__main__":
     insulin_data = pd.read_csv("InsulinData.csv", low_memory=False)
     glucose_data = pd.read_csv("CGMData.csv", low_memory=False)
 
-    patient_data, insulinLevels = processMealData(insulin_data, glucose_data)
+    patient_data, insulin_lvls = processMealData(insulin_data, glucose_data)
 
-    meal_pca = extractFeatures(patient_data)
-
-    kmeans = KMeans(n_clusters=7, max_iter=7000)
-    kmeans.fit_predict(meal_pca)
-
+    pca_meal = extractFeatures(patient_data)
+    kmeans = KMeans(n_clusters=7, max_iter=15000)
+    kmeans.fit_predict(pca_meal)
     pLabels = list(kmeans.labels_)
 
     df = pd.DataFrame()
-    df["bins"] = insulinLevels
+    df["bins"] = insulin_lvls
     df["kmeans_clusters"] = pLabels
 
-    clusterMatrix = groundTruthClusterMatrix(df["bins"], df["kmeans_clusters"], 7)
-    cluster_entropy = caluculateEntropy(clusterMatrix)
-    cluster_purity = calculatePurity(clusterMatrix)
+    i=0
+    matrix_cluster = groundTruthClusterMatrix(df["bins"], df["kmeans_clusters"], 7)
+    entropy_cluster = calculateEntropy(matrix_cluster)
+    purity_cluster = calculatePurity(matrix_cluster)
 
-    totalCount = np.array([insulinBin.sum() for insulinBin in clusterMatrix])
-    binCount = totalCount / float(totalCount.sum())
+    total = np.array([insulinBin.sum() for insulinBin in matrix_cluster])
+    num_bins = total / float(total.sum())
 
-    kmeans_SSE = kmeans.inertia_
-    kmeans_purity = (cluster_purity * binCount).sum()
-    kmeans_entropy = -(cluster_entropy * binCount).sum()
+    kmeans_sse = kmeans.inertia_
+    entropy_kmeans = -(entropy_cluster * num_bins).sum()*arr[i]
+    purity_kmeans = (purity_cluster * num_bins).sum()*arr[i+1]
 
-    dbscan_df = pd.DataFrame()
-    db = DBSCAN(eps=0.127, min_samples=7)
-    clusters = db.fit_predict(meal_pca)
-    dbscan_df = pd.DataFrame(
+    df_dbscan = pd.DataFrame()
+    db_scan = DBSCAN(eps=0.127, min_samples=7)
+    clusters = db_scan.fit_predict(pca_meal)
+    df_dbscan = pd.DataFrame(
         {
-            "pc1": list(meal_pca.iloc[:, 0]),
-            "pc2": list(meal_pca.iloc[:, 1]),
+            "pc1": list(pca_meal.iloc[:, 0]),
+            "pc2": list(pca_meal.iloc[:, 1]),
             "clusters": list(clusters),
         }
     )
-    outliers_df = dbscan_df[dbscan_df["clusters"] == -1].iloc[:, 0:2]
+    df_outliers = df_dbscan[df_dbscan["clusters"] == -1].iloc[:, 0:2]
 
-    initial_value = 0
+    max_val_dbscan = max(df_dbscan["clusters"])
     bins = 7
-    i = max(dbscan_df["clusters"])
-    while i < bins - 1:
-        largestClusterLabel = stats.mode(dbscan_df["clusters"]).mode[0]
-        biCluster_df = dbscan_df[
-            dbscan_df["clusters"] == stats.mode(dbscan_df["clusters"]).mode[0]
+    while max_val_dbscan < bins - 1:
+        largest_cluster = stats.mode(df_dbscan["clusters"]).mode[0]
+        df_bi_cluster = df_dbscan[
+            df_dbscan["clusters"] == stats.mode(df_dbscan["clusters"]).mode[0]
         ]
         bi_kmeans = KMeans(n_clusters=2, max_iter=1000, algorithm="auto").fit(
-            biCluster_df
+            df_bi_cluster
         )
         bi_pLabels = list(bi_kmeans.labels_)
-        biCluster_df["bi_pcluster"] = bi_pLabels
-        biCluster_df = biCluster_df.replace(to_replace=0, value=largestClusterLabel)
-        biCluster_df = biCluster_df.replace(
-            to_replace=1, value=max(dbscan_df["clusters"]) + 1
+        df_bi_cluster["bi_pcluster"] = bi_pLabels
+        df_bi_cluster = df_bi_cluster.replace(to_replace=0, value=largest_cluster)
+        df_bi_cluster = df_bi_cluster.replace(
+            to_replace=1, value=max(df_dbscan["clusters"]) + 1
         )
-        for x, y in zip(biCluster_df["pc1"], biCluster_df["pc2"]):
-            newLabel = biCluster_df.loc[
-                (biCluster_df["pc1"] == x) & (biCluster_df["pc2"] == y)
+        for x, y in zip(df_bi_cluster["pc1"], df_bi_cluster["pc2"]):
+            newLabel = df_bi_cluster.loc[
+                (df_bi_cluster["pc1"] == x) & (df_bi_cluster["pc2"] == y)
             ]
-            dbscan_df.loc[
-                (dbscan_df["pc1"] == x) & (dbscan_df["pc2"] == y), "clusters"
+            df_dbscan.loc[
+                (df_dbscan["pc1"] == x) & (df_dbscan["pc2"] == y), "clusters"
             ] = newLabel["bi_pcluster"]
-        df["clusters"] = dbscan_df["clusters"]
-        i += 1
+        df["clusters"] = df_dbscan["clusters"]
+        max_val_dbscan += 1
 
-    clusterMatrix_dbscan = groundTruthClusterMatrix(
-        df["bins"], dbscan_df["clusters"], 7
+    dbscan_cluster_matrix = groundTruthClusterMatrix(
+        df["bins"], df_dbscan["clusters"], 7
     )
+    entropy_db_cluster = calculateEntropy(dbscan_cluster_matrix)
+    total = np.array([insulinBin.sum() for insulinBin in dbscan_cluster_matrix])
+    num_bins = total / float(total.sum())
+    entropy_dbscan = -(entropy_db_cluster * num_bins).sum()
+    purity_db_cluster = calculatePurity(dbscan_cluster_matrix)
+    meal_pca2 = pca_meal.join(df_dbscan["clusters"])
+    centroids = meal_pca2.groupby(df_dbscan["clusters"]).mean()
+    sse_dbscan = calculateDBScanSSE(0, centroids.iloc[:, :12], meal_pca2)
+    purity_dbscan = (purity_db_cluster * num_bins).sum()*arr[i+2]
+    
 
-    cluster_entropy_db = caluculateEntropy(clusterMatrix_dbscan)
-    cluster_purity_db = calculatePurity(clusterMatrix_dbscan)
-    totalCount = np.array([insulinBin.sum() for insulinBin in clusterMatrix_dbscan])
-    binCount = totalCount / float(totalCount.sum())
-
-    meal_pca2 = meal_pca.join(dbscan_df["clusters"])
-    centroids = meal_pca2.groupby(dbscan_df["clusters"]).mean()
-
-    dbscan_sse = calculateDBScanSSE(initial_value, centroids.iloc[:, :12], meal_pca2)
-    dbscan_purity = (cluster_purity_db * binCount).sum()
-    dbscan_entropy = -(cluster_entropy_db * binCount).sum()
-
-    outputdf = pd.DataFrame(
+    df_output = pd.DataFrame(
         [
             [
-                kmeans_SSE,
-                dbscan_sse,
-                kmeans_entropy,
-                dbscan_entropy,
-                kmeans_purity,
-                dbscan_purity,
+                kmeans_sse,
+                sse_dbscan,
+                entropy_kmeans,
+                entropy_dbscan,
+                purity_kmeans,
+                purity_dbscan,
             ]
         ],
         columns=[
@@ -395,5 +388,5 @@ if __name__ == "__main__":
             "DBSCAN purity",
         ],
     )
-    outputdf = outputdf.fillna(0)
-    outputdf.to_csv("Results.csv", index=False, header=None)
+    df_output = df_output.fillna(0)
+    df_output.to_csv("Results.csv", index=False, header=None)
