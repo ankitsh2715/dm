@@ -173,36 +173,7 @@ def fastFourierTransform(val):
     return [max_amp, max_freq]
 
 
-def getGlucoseFeatures(meal_nomeal_data):
-    gc_features = pd.DataFrame()
-    
-    for i in range(0, meal_nomeal_data.shape[0]):
-        meal_nomeal_list = meal_nomeal_data.iloc[i, :].tolist()
-        gc_features = gc_features.append(
-            {
-                "Minimum Value": min(meal_nomeal_list),
-                "Maximum Value": max(meal_nomeal_list),
-                "Mean of Absolute Values1": absoluteValueMean(meal_nomeal_list[:13]),
-                "Mean of Absolute Values2": absoluteValueMean(meal_nomeal_list[13:]),
-                "Max_Zero_Crossing": fn_zero_crossings(
-                    meal_nomeal_list, meal_nomeal_data.shape[1]
-                )[0],
-                "Zero_Crossing_Rate": fn_zero_crossings(
-                    meal_nomeal_list, meal_nomeal_data.shape[1]
-                )[1],
-                "Root Mean Square": rootMeanSquare(meal_nomeal_list),
-                "Entropy": rootMeanSquare(meal_nomeal_list),
-                "Max FFT Amplitude1": fastFourierTransform(meal_nomeal_list[:13])[0],
-                "Max FFT Frequency1": fastFourierTransform(meal_nomeal_list[:13])[1],
-                "Max FFT Amplitude2": fastFourierTransform(meal_nomeal_list[13:])[0],
-                "Max FFT Frequency2": fastFourierTransform(meal_nomeal_list[13:])[1],
-            },
-            ignore_index=True,
-        )
-    return gc_features
-
-
-def fn_zero_crossings(row, xAxis):
+def zeroCrossings(row, xAxis):
     slopes = [0]
     zero_cross = list()
     zero_crossing_rate = 0
@@ -227,63 +198,96 @@ def fn_zero_crossings(row, xAxis):
         return [0, 0]
 
 
-def getFeatures(mealData):
-    mealDataFeatures = getGlucoseFeatures(mealData.iloc[:, :-1])
+def extractGlucoseFeatures(meal_nomeal_data):
+    gc_features = pd.DataFrame()
+    
+    for i in range(0, meal_nomeal_data.shape[0]):
+        meal_nomeal_list = meal_nomeal_data.iloc[i, :].tolist()
+        gc_features = gc_features.append(
+            {
+                "Minimum Value": min(meal_nomeal_list),
+                "Maximum Value": max(meal_nomeal_list),
+                "Mean of Absolute Values1": absoluteValueMean(meal_nomeal_list[:13]),
+                "Mean of Absolute Values2": absoluteValueMean(meal_nomeal_list[13:]),
+                "Max_Zero_Crossing": zeroCrossings(
+                    meal_nomeal_list, meal_nomeal_data.shape[1]
+                )[0],
+                "Zero_Crossing_Rate": zeroCrossings(
+                    meal_nomeal_list, meal_nomeal_data.shape[1]
+                )[1],
+                "Root Mean Square": rootMeanSquare(meal_nomeal_list),
+                "Entropy": rootMeanSquare(meal_nomeal_list),
+                "Max FFT Amplitude1": fastFourierTransform(meal_nomeal_list[:13])[0],
+                "Max FFT Frequency1": fastFourierTransform(meal_nomeal_list[:13])[1],
+                "Max FFT Amplitude2": fastFourierTransform(meal_nomeal_list[13:])[0],
+                "Max FFT Frequency2": fastFourierTransform(meal_nomeal_list[13:])[1],
+            },
+            ignore_index=True,
+        )
+    return gc_features
 
-    stdScaler = StandardScaler()
-    meal_std = stdScaler.fit_transform(mealDataFeatures)
 
+def extractFeatures(meal_data):
+    meal_gc_features = extractGlucoseFeatures(meal_data.iloc[:, :-1])
+    sscaler = StandardScaler()
+    meal_std = sscaler.fit_transform(meal_gc_features)
     pca = PCA(n_components=12)
     pca.fit(meal_std)
-
     with open("pcs_glucose_data.pkl", "wb") as (file):
         pickle.dump(pca, file)
 
-    meal_pca = pd.DataFrame(pca.fit_transform(meal_std))
-    return meal_pca
+    pca_meal = pd.DataFrame(pca.fit_transform(meal_std))
+
+    return pca_meal
 
 
-def compute_Entropy(bins):
-    mealEntropy = []
-    for insulinBin in bins:
-        insulinBin = np.array(insulinBin)
-        insulinBin = insulinBin / float(insulinBin.sum())
-        binEntropy = (
-            insulinBin
-            * [np.log2(glucose) if glucose != 0 else 0 for glucose in insulinBin]
+def caluculateEntropy(bins):
+    meal_entropy = []
+
+    for bin_val in bins:
+        bin_insulin = np.array(bin_val)
+        bin_insulin = bin_insulin / float(bin_insulin.sum())
+        bin_entropy = (
+            bin_insulin
+            * [np.log2(glucose) if glucose != 0 else 0 for glucose in bin_insulin]
         ).sum()
-        mealEntropy += [binEntropy]
+        meal_entropy += [bin_entropy]
 
-    return mealEntropy
-
-
-def compute_Purity(bins):
-    mealPurity = []
-    for insulinBin in bins:
-        insulinBin = np.array(insulinBin)
-        insulinBin = insulinBin / float(insulinBin.sum())
-        binPurity = insulinBin.max()
-        mealPurity += [binPurity]
-    return mealPurity
+    return meal_entropy
 
 
-def computeDBSCAN_SSE(dbscan_sse, test, meal_pca2):
-    for i in test.index:
+def calculatePurity(bins):
+    purity = []
+
+    for bin_val in bins:
+        bin_insulin = np.array(bin_val)
+        bin_insulin = bin_insulin / float(bin_insulin.sum())
+        bin_purity = bin_insulin.max()
+        purity += [bin_purity]
+
+    return purity
+
+
+def calculateDBScanSSE(dbscan_sse, centroid, meal_pca):
+    for i in centroid.index:
         dbscan_sse = 0
-        for index, row in meal_pca2[meal_pca2["clusters"] == i].iterrows():
-            test_row = list(test.iloc[0, :])
-            meal_row = list(row[:-1])
+        for index, row in meal_pca[meal_pca["clusters"] == i].iterrows():
+            centroid_list = list(centroid.iloc[0, :])
+            meal_list = list(row[:-1])
             for j in range(0, 12):
-                dbscan_sse += (test_row[j] - meal_row[j]) ** 2
+                dbscan_sse += (centroid_list[j] - meal_list[j]) ** 2
+
     return dbscan_sse
 
 
-def clusterMatrixwithGroundTruth(groundTruth, Clustered, k):
-    clusterMatrix = np.zeros((k, k))
-    for i, j in enumerate(groundTruth):
-        val1 = j
-        val2 = Clustered[i]
-        clusterMatrix[val1, val2] += 1
+def groundTruthClusterMatrix(ground_truth, clusters, k_val):
+    clusterMatrix = np.zeros((k_val, k_val))
+    
+    for i, j in enumerate(ground_truth):
+        temp1 = j
+        temp2 = clusters[i]
+        clusterMatrix[temp1, temp2] += 1
+
     return clusterMatrix
 
 
@@ -294,7 +298,7 @@ if __name__ == "__main__":
 
     patient_data, insulinLevels = processMealData(insulin_data, glucose_data)
 
-    meal_pca = getFeatures(patient_data)
+    meal_pca = extractFeatures(patient_data)
 
     kmeans = KMeans(n_clusters=7, max_iter=7000)
     kmeans.fit_predict(meal_pca)
@@ -305,9 +309,9 @@ if __name__ == "__main__":
     df["bins"] = insulinLevels
     df["kmeans_clusters"] = pLabels
 
-    clusterMatrix = clusterMatrixwithGroundTruth(df["bins"], df["kmeans_clusters"], 7)
-    cluster_entropy = compute_Entropy(clusterMatrix)
-    cluster_purity = compute_Purity(clusterMatrix)
+    clusterMatrix = groundTruthClusterMatrix(df["bins"], df["kmeans_clusters"], 7)
+    cluster_entropy = caluculateEntropy(clusterMatrix)
+    cluster_purity = calculatePurity(clusterMatrix)
 
     totalCount = np.array([insulinBin.sum() for insulinBin in clusterMatrix])
     binCount = totalCount / float(totalCount.sum())
@@ -355,19 +359,19 @@ if __name__ == "__main__":
         df["clusters"] = dbscan_df["clusters"]
         i += 1
 
-    clusterMatrix_dbscan = clusterMatrixwithGroundTruth(
+    clusterMatrix_dbscan = groundTruthClusterMatrix(
         df["bins"], dbscan_df["clusters"], 7
     )
 
-    cluster_entropy_db = compute_Entropy(clusterMatrix_dbscan)
-    cluster_purity_db = compute_Purity(clusterMatrix_dbscan)
+    cluster_entropy_db = caluculateEntropy(clusterMatrix_dbscan)
+    cluster_purity_db = calculatePurity(clusterMatrix_dbscan)
     totalCount = np.array([insulinBin.sum() for insulinBin in clusterMatrix_dbscan])
     binCount = totalCount / float(totalCount.sum())
 
     meal_pca2 = meal_pca.join(dbscan_df["clusters"])
     centroids = meal_pca2.groupby(dbscan_df["clusters"]).mean()
 
-    dbscan_sse = computeDBSCAN_SSE(initial_value, centroids.iloc[:, :12], meal_pca2)
+    dbscan_sse = calculateDBScanSSE(initial_value, centroids.iloc[:, :12], meal_pca2)
     dbscan_purity = (cluster_purity_db * binCount).sum()
     dbscan_entropy = -(cluster_entropy_db * binCount).sum()
 
