@@ -13,74 +13,85 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import DBSCAN
 
 
-def getMealData(mealTimes, startTime, endTime, insulinLevels, new_glucose_data):
-    newMealDataRows = []
-    for j, newTime in enumerate(mealTimes):
-        meal_index_start = new_glucose_data[
-            new_glucose_data["datetime"].between(
-                newTime + pd.DateOffset(hours=startTime),
-                newTime + pd.DateOffset(hours=endTime),
+def processMealData(meal_time, start_time, end_time, insulin_level, processed_gluc_data):
+    new_meal_data = []
+
+    for j, mTime in enumerate(meal_time):
+
+        meal_start_index = processed_gluc_data[
+            processed_gluc_data["datetime"].between(
+                mTime + pd.DateOffset(hours=start_time),
+                mTime + pd.DateOffset(hours=end_time),
             )
         ]
-        if meal_index_start.shape[0] < 8:
-            del insulinLevels[j]
+
+        if meal_start_index.shape[0] < 8:
+            del insulin_level[j]
             continue
-        glucoseValues = meal_index_start["Sensor Glucose (mg/dL)"].to_numpy()
-        mean = meal_index_start["Sensor Glucose (mg/dL)"].mean()
-        missing_values_count = 30 - len(glucoseValues)
+        
+        gluc_values = meal_start_index["Sensor Glucose (mg/dL)"].to_numpy()
+        mean_value = meal_start_index["Sensor Glucose (mg/dL)"].mean()
+        missing_values_count = 30 - len(gluc_values)
+
         if missing_values_count > 0:
             for i in range(missing_values_count):
-                glucoseValues = np.append(glucoseValues, mean)
-        newMealDataRows.append(glucoseValues[0:30])
-    return pd.DataFrame(data=newMealDataRows), insulinLevels
+                gluc_values = np.append(gluc_values, mean_value)
+        new_meal_data.append(gluc_values[0:30])
+
+    return pd.DataFrame(data=new_meal_data), insulin_level
 
 
 def getMealtimes(insulin_data):
-    mytimes = []
-    insulinValues = []
-    insulinLevels = []
-    newTimes1 = []
-    newTimes2 = []
-    mealTimes = []
+    filter_time = []
+    insulin_val = []
+    insulin_lvl = []
+    filter_time_1 = []
+    filter_time_2 = []
+    meal_time_res = []
     diff = []
-    column_mine = insulin_data["BWZ Carb Input (grams)"]
-    maxValue = column_mine.max()
-    minValue = column_mine.min()
-    bins = math.ceil(maxValue - minValue / 60)
+
+    carb_input = insulin_data["BWZ Carb Input (grams)"]
+    max_val = carb_input.max()
+    min_val = carb_input.min()
+    bins = math.ceil(max_val - min_val / 60)
+
     for i in insulin_data["datetime"]:
-        mytimes.append(i)
+        filter_time.append(i)
+
     for i in insulin_data["BWZ Carb Input (grams)"]:
-        insulinValues.append(i)
-    for i, j in enumerate(mytimes):
-        if i < len(mytimes) - 1:
-            diff.append((mytimes[i + 1] - mytimes[i]).total_seconds() / 3600)
-    newTimes1 = mytimes[0:-1]
-    newTimes2 = mytimes[1:]
+        insulin_val.append(i)
+    
+    for i, j in enumerate(filter_time):
+        if i < len(filter_time) - 1:
+            diff.append((filter_time[i + 1] - filter_time[i]).total_seconds() / 3600)
+    
+    filter_time_1 = filter_time[0:-1]
+    filter_time_2 = filter_time[1:]
     bins = []
-    for i in insulinValues[0:-1]:
+    for i in insulin_val[0:-1]:
         bins.append(
             0
-            if (i >= minValue and i <= minValue + 20)
+            if (i >= min_val and i <= min_val + 20)
             else 1
-            if (i >= minValue + 21 and i <= minValue + 40)
+            if (i >= min_val + 21 and i <= min_val + 40)
             else 2
-            if (i >= minValue + 41 and i <= minValue + 60)
+            if (i >= min_val + 41 and i <= min_val + 60)
             else 3
-            if (i >= minValue + 61 and i <= minValue + 80)
+            if (i >= min_val + 61 and i <= min_val + 80)
             else 4
-            if (i >= minValue + 81 and i <= minValue + 100)
+            if (i >= min_val + 81 and i <= min_val + 100)
             else 5
-            if (i >= minValue + 101 and i <= minValue + 120)
+            if (i >= min_val + 101 and i <= min_val + 120)
             else 6
         )
-    reqValues = list(zip(newTimes1, newTimes2, diff, bins))
+    reqValues = list(zip(filter_time_1, filter_time_2, diff, bins))
     for j in reqValues:
         if j[2] > 2.5:
-            mealTimes.append(j[0])
-            insulinLevels.append(j[3])
+            meal_time_res.append(j[0])
+            insulin_lvl.append(j[3])
         else:
             continue
-    return mealTimes, insulinLevels
+    return meal_time_res, insulin_lvl
 
 def processData(insulin_data, glucose_data):
     mealData = pd.DataFrame()
@@ -101,7 +112,7 @@ def processData(insulin_data, glucose_data):
         (new_insulin_data["BWZ Carb Input (grams)"] > 0)
     ]
     mealTimes, insulinLevels = getMealtimes(new_insulin_data1)
-    mealData, new_insulinLevels = getMealData(
+    mealData, new_insulinLevels = processMealData(
         mealTimes, -0.5, 2, insulinLevels, new_glucose_data
     )
 
