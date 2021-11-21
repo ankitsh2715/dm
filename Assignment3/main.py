@@ -3,7 +3,6 @@ import numpy as np
 import pickle
 import math
 import pickle_compat
-pickle_compat.patch()
 
 from scipy import stats
 from scipy.fftpack import fft
@@ -12,6 +11,7 @@ from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import DBSCAN
 
+pickle_compat.patch()
 
 def processMealDataHelper(meal_time, start_time, end_time, insulin_level, processed_gluc_data):
     new_meal_data = []
@@ -150,8 +150,8 @@ def glucoseEntropy(val):
 def rootMeanSquare(param):
     rootMeanSquare = 0
     for p in range(0, len(param) - 1):
-
         rootMeanSquare = rootMeanSquare + np.square(param[p])
+        
     return np.sqrt(rootMeanSquare / len(param))
 
 
