@@ -2,7 +2,6 @@ import pandas as pd
 import numpy as np
 import pickle
 import math
-import pickle_compat
 
 from scipy import stats
 from scipy.fftpack import fft
@@ -11,6 +10,7 @@ from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import DBSCAN
 
+import pickle_compat
 pickle_compat.patch()
 
 def processMealDataHelper(meal_time, start_time, end_time, insulin_level, processed_gluc_data):
@@ -169,7 +169,7 @@ def fastFourierTransform(val):
     max_freq = frequency.tolist()[freq.index(max_amp)]
     return [max_amp, max_freq]
 
-arr = [0.72,2.88, 2.30]
+
 def zeroCrossings(row, xAxis):
     slopes = [0]
     zero_cross = list()
@@ -294,7 +294,6 @@ if __name__ == "__main__":
     glucose_data = pd.read_csv("CGMData.csv", low_memory=False)
 
     patient_data, insulin_lvls = processMealData(insulin_data, glucose_data)
-
     pca_meal = extractFeatures(patient_data)
     kmeans = KMeans(n_clusters=7, max_iter=15000)
     kmeans.fit_predict(pca_meal)
@@ -303,8 +302,6 @@ if __name__ == "__main__":
     df = pd.DataFrame()
     df["bins"] = insulin_lvls
     df["kmeans_clusters"] = pLabels
-
-    i=0
     matrix_cluster = groundTruthClusterMatrix(df["bins"], df["kmeans_clusters"], 7)
     entropy_cluster = calculateEntropy(matrix_cluster)
     purity_cluster = calculatePurity(matrix_cluster)
@@ -313,8 +310,8 @@ if __name__ == "__main__":
     num_bins = total / float(total.sum())
 
     kmeans_sse = kmeans.inertia_
-    entropy_kmeans = -(entropy_cluster * num_bins).sum()*arr[i]
-    purity_kmeans = (purity_cluster * num_bins).sum()*arr[i+1]
+    entropy_kmeans = -(entropy_cluster * num_bins).sum()
+    purity_kmeans = (purity_cluster * num_bins).sum()
 
     df_dbscan = pd.DataFrame()
     db_scan = DBSCAN(eps=0.127, min_samples=7)
@@ -365,7 +362,7 @@ if __name__ == "__main__":
     meal_pca2 = pca_meal.join(df_dbscan["clusters"])
     centroids = meal_pca2.groupby(df_dbscan["clusters"]).mean()
     sse_dbscan = calculateDBScanSSE(0, centroids.iloc[:, :12], meal_pca2)
-    purity_dbscan = (purity_db_cluster * num_bins).sum()*arr[i+2]
+    purity_dbscan = (purity_db_cluster * num_bins).sum()
     
 
     df_output = pd.DataFrame(
