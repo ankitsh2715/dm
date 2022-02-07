@@ -292,10 +292,10 @@ if __name__ == "__main__":
 
     insulin_data = pd.read_csv("InsulinData.csv", low_memory=False)
     glucose_data = pd.read_csv("CGMData.csv", low_memory=False)
-
+    bins = 7
     patient_data, insulin_lvls = processMealData(insulin_data, glucose_data)
     pca_meal = extractFeatures(patient_data)
-    kmeans = KMeans(n_clusters=7, max_iter=15000)
+    kmeans = KMeans(n_clusters=bins, max_iter=15000)
     kmeans.fit_predict(pca_meal)
     pLabels = list(kmeans.labels_)
 
@@ -314,7 +314,7 @@ if __name__ == "__main__":
     purity_kmeans = (purity_cluster * num_bins).sum()
 
     df_dbscan = pd.DataFrame()
-    db_scan = DBSCAN(eps=0.127, min_samples=7)
+    db_scan = DBSCAN(eps=0.127, min_samples=bins)
     clusters = db_scan.fit_predict(pca_meal)
     df_dbscan = pd.DataFrame(
         {
@@ -326,7 +326,6 @@ if __name__ == "__main__":
     df_outliers = df_dbscan[df_dbscan["clusters"] == -1].iloc[:, 0:2]
 
     max_val_dbscan = max(df_dbscan["clusters"])
-    bins = 7
     while max_val_dbscan < bins - 1:
         largest_cluster = stats.mode(df_dbscan["clusters"]).mode[0]
         df_bi_cluster = df_dbscan[
